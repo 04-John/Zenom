@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import { ArchiveProductButton } from "./ArchiveProductButton";
 
 export default async function StudioProductsPage() {
   const session = await getServerSession(authOptions);
@@ -28,6 +29,7 @@ export default async function StudioProductsPage() {
               <th className="py-2">Status</th>
               <th className="py-2">Price</th>
               <th className="py-2"></th>
+              <th className="py-2"></th>
             </tr>
           </thead>
           <tbody>
@@ -41,6 +43,9 @@ export default async function StudioProductsPage() {
                   <Link href={`/studio/products/${p.id}/edit`} className="text-copper underline">
                     Edit
                   </Link>
+                </td>
+                <td className="py-3">
+                  <ArchiveProductButton productId={p.id} status={p.status} />
                 </td>
               </tr>
             ))}

@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { useToast } from "@/components/ui/Toast";
 
 // Products can be pre-seeded under pillar ABSTRACT / SPACES with status
 // COMING_SOON while those pillars are gated — the storefront query for
 // those pillars filters to AVAILABLE only, so this never leaks early.
 export function ProductForm({ initial }: { initial?: any }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [form, setForm] = useState({
     name: initial?.name ?? "",
     slug: initial?.slug ?? "",
@@ -34,11 +36,14 @@ export function ProductForm({ initial }: { initial?: any }) {
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      setError(body.error ?? "Something went wrong.");
+      const message = body.error ?? "Something went wrong.";
+      setError(message);
+      toast(message, "error");
       setSaving(false);
       return;
     }
 
+    toast(initial ? "Product updated." : "Product created.");
     router.push("/studio/products");
     router.refresh();
   }

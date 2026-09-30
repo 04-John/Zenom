@@ -5,6 +5,7 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { LenisProvider } from "@/components/motion/LenisProvider";
 import { CartProvider } from "@/context/CartContext";
+import { ToastProvider } from "@/components/ui/Toast";
 
 const display = Cormorant_Garamond({
   subsets: ["latin"],
@@ -29,13 +30,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${display.variable} ${sans.variable}`}>
       <body>
-        <CartProvider>
-          <LenisProvider>
-            <Header />
-            <main className="pt-20">{children}</main>
-            <Footer />
-          </LenisProvider>
-        </CartProvider>
+        <ToastProvider>
+          <CartProvider>
+            <LenisProvider>
+              <Header />
+              <main className="pt-20">{children}</main>
+              <Footer />
+            </LenisProvider>
+          </CartProvider>
+        </ToastProvider>
       </body>
     </html>
   );

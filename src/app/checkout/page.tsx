@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { useToast } from "@/components/ui/Toast";
 import Link from "next/link";
 
 // Checkout is intentionally simple: no payment fields, ever. Order is
@@ -14,6 +15,7 @@ import Link from "next/link";
 export default function CheckoutPage() {
   const { items, subtotal, clear } = useCart();
   const router = useRouter();
+  const { toast } = useToast();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -68,13 +70,16 @@ export default function CheckoutPage() {
 
       const { whatsappUrl, orderNumber } = await res.json();
       clear();
+      toast(`Order ${orderNumber} placed — confirm details on WhatsApp.`);
 
       // Order already exists in the database at this point — WhatsApp
       // opening or not opening has no bearing on whether the order is real.
       if (whatsappUrl) window.open(whatsappUrl, "_blank");
       router.push(`/account/orders?confirmed=${orderNumber}`);
     } catch (err: any) {
-      setError(err.message ?? "Something went wrong. Please try again.");
+      const message = err.message ?? "Something went wrong. Please try again.";
+      setError(message);
+      toast(message, "error");
     } finally {
       setSubmitting(false);
     }
