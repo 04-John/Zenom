@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { checkoutSchema } from "@/lib/validation";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { sendOrderEmails } from "@/lib/email";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 // Order creation, in the required sequence:
 // 1. validate  2. save to Postgres  3. attempt email (failure non-fatal)
@@ -12,6 +13,11 @@ import { sendOrderEmails } from "@/lib/email";
 // Never open WhatsApp before the order is successfully saved.
 export async function POST(req: NextRequest) {
   try {
+    const { allowed } = rateLimit(`orders:${clientIp(req)}`, 10, 10 * 60 * 1000);
+    if (!allowed) {
+      return NextResponse.json({ error: "Too many orders submitted. Please try again shortly." }, { status: 429 });
+    }
+
     const session = await getServerSession(authOptions);
     const body = await req.json();
     const parsed = checkoutSchema.safeParse(body);

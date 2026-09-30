@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 const ERROR_MESSAGES: Record<string, string> = {
   EmailNotVerified: "Please verify your email before signing in — check your inbox for the link.",
   InvalidVerificationLink: "That verification link is invalid or has expired.",
+  TooManyAttempts: "Too many attempts. Please wait a while before trying again.",
 };
 
 // One login page, one auth system. Role-based routing (customer vs

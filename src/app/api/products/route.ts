@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { productSchema } from "@/lib/validation";
 
 export async function GET(req: NextRequest) {
   const pillar = req.nextUrl.searchParams.get("pillar") ?? "PORTRAITS";
@@ -21,16 +22,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  const body = await req.json();
+  const parsed = productSchema.safeParse(await req.json());
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Please check the form and try again." }, { status: 400 });
+  }
+
   // A default Category per pillar is assumed to exist (seeded) —
   // in a fuller build this would resolve/select a real categoryId.
-  const category = await prisma.category.findFirst({ where: { pillar: body.pillar } });
+  const category = await prisma.category.findFirst({ where: { pillar: parsed.data.pillar } });
   if (!category) {
     return NextResponse.json({ error: "No category found for this pillar. Seed categories first." }, { status: 400 });
   }
 
   const product = await prisma.product.create({
-    data: { ...body, categoryId: category.id },
+    data: { ...parsed.data, categoryId: category.id },
   });
   return NextResponse.json(product, { status: 201 });
 }

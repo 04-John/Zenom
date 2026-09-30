@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { sendVerificationEmail } from "@/lib/email";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 const signupSchema = z.object({
   name: z.string().min(2).max(120),
@@ -12,6 +13,11 @@ const signupSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const { allowed } = rateLimit(`signup:${clientIp(req)}`, 5, 15 * 60 * 1000);
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many attempts. Please try again later." }, { status: 429 });
+  }
+
   const parsed = signupSchema.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Please check the form and try again." }, { status: 400 });
