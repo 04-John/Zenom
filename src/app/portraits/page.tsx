@@ -4,6 +4,13 @@ import { Reveal } from "@/components/motion/Reveal";
 
 export const metadata = { title: "Portraits | Zenom Studio" };
 
+// Product listing changes via the admin panel — never statically cache
+// this at build time. Without this, Next treats the page as static-
+// eligible (no cookies()/headers() call) and prerenders it at build
+// time, which both bakes in stale data and fails the build outright if
+// the database happens to be unreachable during that build.
+export const dynamic = "force-dynamic";
+
 export default async function PortraitsPage() {
   const products = await prisma.product.findMany({
     where: { pillar: "PORTRAITS", status: { in: ["AVAILABLE", "SOLD_OUT"] } },

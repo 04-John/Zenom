@@ -1,4 +1,24 @@
 import { withSentryConfig } from "@sentry/nextjs/config";
+
+// Fonts are self-hosted at build time by next/font (no runtime request to
+// Google), and Sentry events are tunneled through same-origin /monitoring
+// (see tunnelRoute below) — so connect-src / font-src can stay locked to
+// 'self'. script-src / style-src keep 'unsafe-inline' because Next.js
+// hydration and React's inline `style` attributes need it without a
+// nonce-based setup; tightening that further would need middleware-issued
+// nonces, which hasn't been verified against a live browser here.
+const csp = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: https://res.cloudinary.com https://*.netlify.app",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -6,6 +26,21 @@ const nextConfig = {
       { protocol: "https", hostname: "res.cloudinary.com" },
       { protocol: "https", hostname: "*.netlify.app" },
     ],
+  },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+          { key: "Content-Security-Policy", value: csp },
+        ],
+      },
+    ];
   },
 };
 
