@@ -3,7 +3,7 @@ import Link from "next/link";
 export function Footer() {
   return (
     <footer className="bg-navy px-6 py-16 text-ivory lg:px-10">
-      <div className="mx-auto grid max-w-container gap-12 md:grid-cols-4">
+      <div className="mx-auto grid max-w-container gap-12 md:grid-cols-3 lg:grid-cols-5">
         <div>
           <p className="font-display text-xl">ZENOM STUDIO</p>
           <p className="mt-2 text-sm text-ivory/60">Art for People, Art for Spaces.</p>
@@ -14,6 +14,13 @@ export function Footer() {
           links={[
             { href: "/account", label: "My Account" },
             { href: "/account/orders", label: "My Orders" },
+          ]}
+        />
+        <FooterCol
+          title="Legal"
+          links={[
+            { href: "/privacy", label: "Privacy Policy" },
+            { href: "/terms", label: "Terms of Service" },
           ]}
         />
         <FooterCol

@@ -105,6 +105,11 @@ export default function CheckoutPage() {
         <Button type="submit" loading={submitting} className="w-full">
           Submit Order & Continue to WhatsApp
         </Button>
+        <p className="text-xs text-charcoal/50">
+          By submitting, you agree to our{" "}
+          <a href="/terms" className="text-copper underline">Terms of Service</a> and{" "}
+          <a href="/privacy" className="text-copper underline">Privacy Policy</a>.
+        </p>
       </form>
     </div>
   );
