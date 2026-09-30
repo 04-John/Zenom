@@ -2,7 +2,10 @@ export const metadata = { title: "Privacy Policy | Zenom Studio" };
 
 // First-draft privacy policy — accurately reflects what this codebase
 // actually collects and which third parties it sends data to as of the
-// date below. Have this reviewed against NDPR (and GDPR, if serving EU
+// date below. Reviewed against the Nigeria Data Protection Act, 2023
+// (NDPA) — see the lawful-basis, cross-border-transfer, and NDPC
+// complaint sections below, added to satisfy sections 25/27/41-43/46.
+// Still have this reviewed by counsel (and against GDPR, if serving EU
 // customers) before relying on it in production; update the "Last
 // updated" date and this list whenever a new integration is added.
 export default function PrivacyPolicyPage() {
@@ -21,7 +24,8 @@ export default function PrivacyPolicyPage() {
             <a href="mailto:zenomart.studio@gmail.com" className="text-copper underline">
               zenomart.studio@gmail.com
             </a>{" "}
-            with any question or request about your data.
+            with any question or request about your data. We process personal data in accordance with the
+            Nigeria Data Protection Act, 2023 (NDPA).
           </p>
         </Section>
 
@@ -44,12 +48,18 @@ export default function PrivacyPolicyPage() {
           </ul>
         </Section>
 
-        <Section title="Why we collect it">
+        <Section title="Why we collect it, and our legal basis">
           <ul className="list-disc space-y-1 pl-5">
-            <li>To create and fulfil your order, including contacting you to confirm final pricing and details.</li>
-            <li>To send order confirmation and status emails.</li>
-            <li>To let you sign in and view your order history.</li>
-            <li>To detect and fix bugs on the Site.</li>
+            <li>
+              To create and fulfil your order, including contacting you to confirm final pricing and
+              details — necessary for performance of a contract with you (NDPA s.25(1)(b)(i)).
+            </li>
+            <li>To send order confirmation and status emails — same basis.</li>
+            <li>To let you sign in and view your order history — same basis.</li>
+            <li>
+              To detect and fix bugs on the Site — our legitimate interest in keeping the Site working
+              (NDPA s.25(1)(b)(v)).
+            </li>
           </ul>
           <p className="mt-2">We do not sell your personal information, and we do not use it for advertising.</p>
         </Section>
@@ -78,6 +88,15 @@ export default function PrivacyPolicyPage() {
           </ul>
         </Section>
 
+        <Section title="Sending your data outside Nigeria">
+          <p>
+            Neon, Resend, Cloudinary, and Sentry each process data outside Nigeria. Under NDPA s.43(1)(b),
+            we rely on the fact that this transfer is necessary to perform our contract with you — we
+            can&rsquo;t create your account, save your order, email your confirmation, or host your images
+            without it. We only send these providers what they need to do that job.
+          </p>
+        </Section>
+
         <Section title="Cookies">
           <p>
             We use one essential cookie to keep you signed in (via NextAuth). We don&rsquo;t use marketing,
@@ -94,18 +113,39 @@ export default function PrivacyPolicyPage() {
 
         <Section title="Your rights">
           <p>
-            You can ask us to access, correct, or delete your personal information, or to export your order
-            history, by emailing{" "}
+            Under Part VI of the NDPA, you can ask us to confirm what we hold about you, access or export a
+            copy of it, correct it, restrict or object to its processing, or erase it, by emailing{" "}
             <a href="mailto:zenomart.studio@gmail.com" className="text-copper underline">
               zenomart.studio@gmail.com
             </a>
             . We&rsquo;ll respond within a reasonable time. Deleting your data may mean we can no longer
-            fulfil an order in progress.
+            fulfil an order in progress. If you&rsquo;re not satisfied with how we&rsquo;ve handled a
+            request, you can lodge a complaint with the{" "}
+            <strong>Nigeria Data Protection Commission (NDPC)</strong> under NDPA s.46.
+          </p>
+        </Section>
+
+        <Section title="Automated decision-making">
+          <p>
+            We don&rsquo;t use automated decision-making or profiling that produces legal or similarly
+            significant effects for you (NDPA s.37) — every order is reviewed and confirmed by a person on
+            WhatsApp before production starts.
+          </p>
+        </Section>
+
+        <Section title="If something goes wrong">
+          <p>
+            If a security incident affects your personal data, we&rsquo;ll notify the NDPC and, where the
+            law requires it, you directly, as set out in NDPA s.40.
           </p>
         </Section>
 
         <Section title="Children">
-          <p>The Site is not directed at children, and we do not knowingly collect data from anyone under 13.</p>
+          <p>
+            The Site is not directed at children, and we do not knowingly collect data from anyone under
+            13. Where NDPA s.31 requires a parent or guardian&rsquo;s consent, we do not process a
+            child&rsquo;s data without it.
+          </p>
         </Section>
 
         <Section title="Changes to this policy">
