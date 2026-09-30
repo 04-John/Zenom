@@ -1,0 +1,161 @@
+// Zenom Studio — Prisma schema
+// Same relational discipline as the Heavens Creative structural reference:
+// explicit models and constraints, no JSON-blob shortcuts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+enum Pillar {
+  PORTRAITS
+  ABSTRACT
+  SPACES
+}
+
+enum ProductStatus {
+  AVAILABLE
+  SOLD_OUT
+  DRAFT
+  COMING_SOON
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  IN_PRODUCTION
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+enum AbstractStyle {
+  MINIMALIST
+  FIGURATIVE
+  GEOMETRIC_ABSTRACT
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  passwordHash  String?
+  role          Role      @default(CUSTOMER)
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  orders        Order[]
+
+  @@index([email])
+}
+
+// Signup email verification tokens. identifier = the user's email.
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Category {
+  id       String    @id @default(cuid())
+  pillar   Pillar
+  name     String
+  slug     String    @unique
+  products Product[]
+}
+
+model Product {
+  id            String         @id @default(cuid())
+  categoryId    String
+  category      Category       @relation(fields: [categoryId], references: [id])
+  pillar        Pillar
+  name          String
+  slug          String         @unique
+  description   String
+  basePrice     Int            // stored in kobo to avoid float rounding
+  status        ProductStatus  @default(DRAFT)
+  archiveCode   String?        // Zenom Archive numbering, e.g. "ZS-001"
+  abstractStyle AbstractStyle?
+  images        ProductImage[]
+  orderItems    OrderItem[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([pillar, status])
+  @@index([slug])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String
+  order     Int     @default(0)
+
+  @@index([productId])
+}
+
+// Portrait customization: 7 sizes x 2 background tracks
+model PortraitSize {
+  id            String      @id @default(cuid())
+  label         String      // "6x8" ... "24x36"
+  priceModifier Int         @default(0)
+  orderItems    OrderItem[]
+}
+
+model BackgroundTrack {
+  id            String      @id @default(cuid())
+  label         String      // "Plain" | "Detailed"
+  priceModifier Int         @default(0)
+  orderItems    OrderItem[]
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  orderNumber     String      @unique // e.g. "ZS-0001"
+  userId          String?
+  user            User?       @relation(fields: [userId], references: [id])
+  status          OrderStatus @default(PENDING)
+  customerName    String
+  customerEmail   String
+  customerPhone   String
+  deliveryAddress String
+  notes           String?
+  totalAmount     Int
+  items           OrderItem[]
+  emailSent       Boolean     @default(false)
+  whatsappOpened  Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model OrderItem {
+  id                String           @id @default(cuid())
+  orderId           String
+  order             Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId         String
+  product           Product          @relation(fields: [productId], references: [id])
+  sizeId            String?
+  size              PortraitSize?    @relation(fields: [sizeId], references: [id])
+  backgroundTrackId String?
+  backgroundTrack   BackgroundTrack? @relation(fields: [backgroundTrackId], references: [id])
+  quantity          Int              @default(1)
+  notes             String?
+  subtotal          Int
+
+  @@index([orderId])
+}
