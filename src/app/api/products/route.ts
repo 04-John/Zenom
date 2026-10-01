@@ -34,8 +34,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No category found for this pillar. Seed categories first." }, { status: 400 });
   }
 
+  const { imageUrl, ...productData } = parsed.data;
+
   const product = await prisma.product.create({
-    data: { ...parsed.data, categoryId: category.id },
+    data: {
+      ...productData,
+      categoryId: category.id,
+      ...(imageUrl && { images: { create: [{ url: imageUrl, alt: productData.name, order: 0 }] } }),
+    },
   });
   return NextResponse.json(product, { status: 201 });
 }

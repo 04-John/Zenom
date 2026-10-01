@@ -15,6 +15,23 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: "Please check the form and try again." }, { status: 400 });
   }
 
-  const product = await prisma.product.update({ where: { id: params.id }, data: parsed.data });
+  const { imageUrl, ...productData } = parsed.data;
+
+  const product = await prisma.product.update({ where: { id: params.id }, data: productData });
+
+  if (imageUrl) {
+    const existing = await prisma.productImage.findFirst({
+      where: { productId: params.id },
+      orderBy: { order: "asc" },
+    });
+    if (existing) {
+      await prisma.productImage.update({ where: { id: existing.id }, data: { url: imageUrl } });
+    } else {
+      await prisma.productImage.create({
+        data: { productId: params.id, url: imageUrl, alt: product.name, order: 0 },
+      });
+    }
+  }
+
   return NextResponse.json(product);
 }

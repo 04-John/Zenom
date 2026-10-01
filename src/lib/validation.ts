@@ -38,6 +38,9 @@ export const productSchema = z.object({
   status: z.enum(["AVAILABLE", "SOLD_OUT", "DRAFT", "COMING_SOON"]),
   archiveCode: z.string().max(50).optional().nullable(),
   abstractStyle: z.enum(["MINIMALIST", "FIGURATIVE", "GEOMETRIC_ABSTRACT"]).optional().nullable(),
+  // Not a Product column — pulled out separately to create/update the
+  // primary ProductImage. See /api/products and /api/products/[id].
+  imageUrl: z.string().url().optional(),
 });
 
 export const productUpdateSchema = productSchema.partial();

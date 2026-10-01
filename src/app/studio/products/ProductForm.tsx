@@ -19,9 +19,51 @@ export function ProductForm({ initial }: { initial?: any }) {
     pillar: initial?.pillar ?? "PORTRAITS",
     status: initial?.status ?? "DRAFT",
     archiveCode: initial?.archiveCode ?? "",
+    imageUrl: initial?.images?.[0]?.url ?? "",
   });
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setError(null);
+    try {
+      const sigRes = await fetch("/api/uploads/signature", { method: "POST" });
+      if (!sigRes.ok) {
+        const body = await sigRes.json().catch(() => ({}));
+        throw new Error(body.error ?? "Couldn't prepare the upload.");
+      }
+      const { signature, timestamp, apiKey, cloudName, folder } = await sigRes.json();
+
+      const uploadData = new FormData();
+      uploadData.append("file", file);
+      uploadData.append("api_key", apiKey);
+      uploadData.append("timestamp", String(timestamp));
+      uploadData.append("signature", signature);
+      uploadData.append("folder", folder);
+
+      const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+        method: "POST",
+        body: uploadData,
+      });
+      if (!uploadRes.ok) throw new Error("Image upload failed.");
+
+      const uploaded = await uploadRes.json();
+      setForm((f) => ({ ...f, imageUrl: uploaded.secure_url }));
+      toast("Image uploaded.");
+    } catch (err: any) {
+      const message = err.message ?? "Image upload failed.";
+      setError(message);
+      toast(message, "error");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -31,7 +73,11 @@ export function ProductForm({ initial }: { initial?: any }) {
     const res = await fetch(initial ? `/api/products/${initial.id}` : "/api/products", {
       method: initial ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, basePrice: Math.round(form.basePrice * 100) }),
+      body: JSON.stringify({
+        ...form,
+        basePrice: Math.round(form.basePrice * 100),
+        imageUrl: form.imageUrl || undefined,
+      }),
     });
 
     if (!res.ok) {
@@ -55,6 +101,22 @@ export function ProductForm({ initial }: { initial?: any }) {
       <Field label="Archive Code (e.g. ZS-001)" value={form.archiveCode} onChange={(v) => setForm({ ...form, archiveCode: v })} />
       <Field label="Description" value={form.description} onChange={(v) => setForm({ ...form, description: v })} textarea />
       <Field label="Base Price (₦)" type="number" value={String(form.basePrice)} onChange={(v) => setForm({ ...form, basePrice: Number(v) })} />
+
+      <label className="block">
+        <span className="text-sm font-medium text-navy">Product Image</span>
+        {form.imageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element -- admin preview of an arbitrary Cloudinary URL, not a storefront-optimized image
+          <img src={form.imageUrl} alt="" className="mt-2 h-32 w-32 rounded-card object-cover" />
+        )}
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleImageSelect}
+          disabled={uploading}
+          className="mt-2 block w-full text-sm text-charcoal/70"
+        />
+        {uploading && <p className="mt-1 text-xs text-charcoal/50">Uploading…</p>}
+      </label>
 
       <label className="block">
         <span className="text-sm font-medium text-navy">Pillar</span>
@@ -84,7 +146,7 @@ export function ProductForm({ initial }: { initial?: any }) {
       </label>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <Button type="submit" loading={saving}>
+      <Button type="submit" loading={saving} disabled={uploading}>
         Save Product
       </Button>
     </form>

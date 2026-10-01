@@ -8,7 +8,10 @@ export default async function EditProductPage({ params }: { params: { id: string
   const session = await getServerSession(authOptions);
   if (!session || (session.user as any).role !== "ADMIN") redirect("/login");
 
-  const product = await prisma.product.findUnique({ where: { id: params.id } });
+  const product = await prisma.product.findUnique({
+    where: { id: params.id },
+    include: { images: { orderBy: { order: "asc" }, take: 1 } },
+  });
   if (!product) notFound();
 
   return (
