@@ -49,8 +49,12 @@ async function main() {
   // ADMIN_SEED_PASSWORD in .env before seeding, or a random one-time
   // password is generated and printed to the console (change it on first
   // login; it is not stored anywhere after this run).
-  const adminEmail = process.env.ADMIN_SEED_EMAIL ?? "zenomart.studio@gmail.com";
-  const adminPassword = process.env.ADMIN_SEED_PASSWORD ?? crypto.randomBytes(12).toString("base64url");
+  const adminEmail = process.env.ADMIN_SEED_EMAIL || "zenomart.studio@gmail.com";
+  // Nullish coalescing (??) only falls back on null/undefined — an
+  // ADMIN_SEED_PASSWORD="" in .env is neither, so it would hash an empty
+  // password. Use a truthiness check instead.
+  const generatedPassword = crypto.randomBytes(12).toString("base64url");
+  const adminPassword = process.env.ADMIN_SEED_PASSWORD || generatedPassword;
   const passwordHash = await bcrypt.hash(adminPassword, 12);
 
   await prisma.user.upsert({
@@ -68,7 +72,7 @@ async function main() {
   });
 
   if (!process.env.ADMIN_SEED_PASSWORD) {
-    console.log(`Generated admin password for ${adminEmail}: ${adminPassword}`);
+    console.log(`Admin password for ${adminEmail}: ${adminPassword}`);
     console.log("Save this now — it will not be shown again. Change it after first login.");
   }
 
