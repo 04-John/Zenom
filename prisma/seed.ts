@@ -1,49 +1,49 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import { SIZES, pillarFor, toDbCategory } from "../src/lib/pricing";
+import { CATALOG } from "../src/lib/catalog";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  // Categories — one per pillar, Abstract/Spaces seeded but gated by
-  // the storefront query + feature flag, not by category absence.
-  const portraits = await prisma.category.upsert({
-    where: { slug: "portraits" },
-    update: {},
-    create: { pillar: "PORTRAITS", name: "Portraits", slug: "portraits" },
-  });
-  await prisma.category.upsert({
-    where: { slug: "abstract" },
-    update: {},
-    create: { pillar: "ABSTRACT", name: "Abstract", slug: "abstract" },
-  });
-  await prisma.category.upsert({
-    where: { slug: "spaces" },
-    update: {},
-    create: { pillar: "SPACES", name: "Spaces", slug: "spaces" },
-  });
-
-  // Portrait sizes — 7 sizes, 6x8 through 24x36. Price modifiers are
-  // placeholders; replace with Samuel's actual pricing sheet.
-  const sizeLabels = ["6x8", "8x10", "11x14", "16x20", "18x24", "20x24", "24x36"];
-  for (const [i, label] of sizeLabels.entries()) {
-    await prisma.portraitSize.upsert({
-      where: { id: `size-${label}` },
-      update: {},
-      create: { id: `size-${label}`, label, priceModifier: i * 5000 },
-    });
+  // The 6 sizes, straight from pricing.ts (prices are not stored in the DB).
+  // ids are stable, so re-running updates in place. Legacy size rows
+  // (e.g. 6x8, 8x10) are left alone — old orders may still point at them.
+  for (const s of SIZES) {
+    const id = `size-${s.label.replace("×", "x")}`;
+    const data = { label: s.label, widthIn: s.widthIn, heightIn: s.heightIn, sortOrder: s.sortOrder };
+    await prisma.portraitSize.upsert({ where: { id }, update: data, create: { id, ...data } });
   }
 
-  await prisma.backgroundTrack.upsert({
-    where: { id: "track-plain" },
-    update: {},
-    create: { id: "track-plain", label: "Plain", priceModifier: 0 },
-  });
-  await prisma.backgroundTrack.upsert({
-    where: { id: "track-detailed" },
-    update: {},
-    create: { id: "track-detailed", label: "Detailed", priceModifier: 8000 },
-  });
+  // The 38 artworks from src/lib/catalog.ts (images in /public/art, see
+  // scripts/prepare-art.mjs). Matched by archive code, so re-running never
+  // overwrites a title or description the owner has already renamed.
+  // TODO(owner): titles are placeholders from the design reference.
+  let created = 0;
+  for (const a of CATALOG) {
+    const category = toDbCategory(a.category);
+    const pillar = pillarFor(a.category);
+    const existing = await prisma.product.findFirst({ where: { archiveCode: a.archiveCode } });
+    if (existing) {
+      await prisma.product.update({ where: { id: existing.id }, data: { category, pillar } });
+      continue;
+    }
+    await prisma.product.create({
+      data: {
+        name: a.title,
+        slug: a.slug,
+        description: `${a.medium}. ${a.blurb}`,
+        category,
+        pillar,
+        status: "AVAILABLE",
+        archiveCode: a.archiveCode,
+        images: { create: [{ url: a.src, alt: a.title, order: 0 }] },
+      },
+    });
+    created++;
+  }
+  console.log(`Artworks: ${created} created, ${CATALOG.length - created} already present. Titles are PLACEHOLDERS — TODO: owner to rename.`);
 
   // Admin user — no hardcoded default password. Set ADMIN_SEED_EMAIL /
   // ADMIN_SEED_PASSWORD in .env before seeding, or a random one-time
@@ -57,23 +57,26 @@ async function main() {
   const adminPassword = process.env.ADMIN_SEED_PASSWORD || generatedPassword;
   const passwordHash = await bcrypt.hash(adminPassword, 12);
 
-  await prisma.user.upsert({
-    where: { email: adminEmail },
-    update: {},
-    create: {
-      email: adminEmail,
-      name: "Samuel",
-      passwordHash,
-      role: "ADMIN",
-      // Seeded directly, not through /api/auth/signup — mark verified so
-      // the emailVerified check in src/lib/auth.ts doesn't lock it out.
-      emailVerified: new Date(),
-    },
-  });
-
-  if (!process.env.ADMIN_SEED_PASSWORD) {
-    console.log(`Admin password for ${adminEmail}: ${adminPassword}`);
-    console.log("Save this now — it will not be shown again. Change it after first login.");
+  // An existing admin is never touched, so its password must not be reported.
+  const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
+  if (existingAdmin) {
+    console.log(`Admin ${adminEmail} already exists — left unchanged (use your existing password).`);
+  } else {
+    await prisma.user.create({
+      data: {
+        email: adminEmail,
+        name: "Samuel",
+        passwordHash,
+        role: "ADMIN",
+        // Seeded directly, not through /api/auth/signup — mark verified so
+        // the emailVerified check in src/lib/auth.ts doesn't lock it out.
+        emailVerified: new Date(),
+      },
+    });
+    if (!process.env.ADMIN_SEED_PASSWORD) {
+      console.log(`Admin password for ${adminEmail}: ${adminPassword}`);
+      console.log("Save this now — it will not be shown again. Change it after first login.");
+    }
   }
 
   console.log("Seed complete.");

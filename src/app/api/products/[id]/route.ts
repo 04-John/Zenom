@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { productUpdateSchema } from "@/lib/validation";
+import { fromDbCategory, pillarFor } from "@/lib/pricing";
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -17,7 +18,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const { imageUrl, ...productData } = parsed.data;
 
-  const product = await prisma.product.update({ where: { id: params.id }, data: productData });
+  const product = await prisma.product.update({
+    where: { id: params.id },
+    data: {
+      ...productData,
+      ...(productData.category && { pillar: pillarFor(fromDbCategory(productData.category)) }),
+    },
+  });
 
   if (imageUrl) {
     const existing = await prisma.productImage.findFirst({

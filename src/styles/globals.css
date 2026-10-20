@@ -3,12 +3,90 @@
 @tailwind utilities;
 
 :root {
-  --font-display: "Cormorant Garamond", serif;
-  --font-sans: "Inter", sans-serif;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-travel: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-wipe: cubic-bezier(0.76, 0, 0.24, 1);
+}
+
+@layer base {
+  html {
+    background: #12100e;
+    /* framer-motion's useScroll warns when the scroll container is position: static. */
+    position: relative;
+  }
+  body {
+    @apply bg-night font-sans text-[15px] leading-[1.65] text-ink-2 antialiased;
+    overflow-x: hidden;
+  }
+  /* Default link colours: ink, hover ember. Utility classes still win. */
+  a {
+    color: #efe9df;
+    text-decoration: none;
+    transition: color 0.25s var(--ease-out);
+  }
+  a:hover {
+    color: #e58a52;
+  }
+  ::selection {
+    background: #e58a52;
+    color: #12100e;
+  }
+  button {
+    font-family: inherit;
+  }
+  input,
+  textarea,
+  select {
+    font-family: inherit;
+  }
+}
+
+@layer components {
+  /* Type scale (see README). Display = Instrument Serif italic. */
+  .font-display {
+    font-weight: 400;
+    letter-spacing: -0.01em;
+  }
+  .h-hero {
+    @apply font-display italic;
+    font-size: clamp(56px, 9vw, 132px);
+    line-height: 0.92;
+  }
+  .h-section {
+    @apply font-display italic;
+    font-size: clamp(44px, 5.6vw, 92px);
+    line-height: 0.95;
+  }
+  .h-page {
+    @apply font-display italic;
+    font-size: clamp(56px, 8vw, 120px);
+    line-height: 0.9;
+  }
+  .kicker {
+    @apply font-mono uppercase text-ember;
+    font-size: 11px;
+    letter-spacing: 0.26em;
+  }
+  .label-mono {
+    @apply font-mono uppercase text-ink-3;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+  }
+  /* Prices and sizes: upright serif. */
+  .num-serif {
+    @apply font-display not-italic;
+    font-size: 28px;
+  }
+  /* Form controls on dark. */
+  .field {
+    @apply w-full rounded-input border border-ink/15 bg-night-raised px-4 py-3.5 text-[15px] text-ink outline-none transition-colors placeholder:text-ink-3 focus:border-ember;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
@@ -16,6 +94,60 @@
   }
 }
 
-body {
-  @apply bg-ivory text-charcoal font-sans antialiased;
+/* Lenis */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+/* Hide the native cursor only where the custom one is active. */
+@media (pointer: fine) {
+  html.has-custom-cursor,
+  html.has-custom-cursor a,
+  html.has-custom-cursor button,
+  html.has-custom-cursor [data-cursor] {
+    cursor: none;
+  }
+}
+
+/* Film grain overlay: SVG feTurbulence (baseFrequency .85, 2 octaves). */
+.film-grain {
+  position: fixed;
+  inset: 0;
+  z-index: 1150;
+  pointer-events: none;
+  opacity: 0.07;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* Returning visitors skip the intro loader (flag set by an inline <head> script). */
+html[data-intro-seen] [data-intro-loader] {
+  display: none;
+}
+
+/* During a page "travel" the footer is hidden and the backdrop goes darker. */
+html[data-traveling] {
+  background: #070605;
+}
+html[data-traveling] footer {
+  visibility: hidden;
+}
+
+/* Pre-hydration state for <Reveal>; lifted in useReveal before first paint. */
+.rv-hidden {
+  opacity: 0;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
 }

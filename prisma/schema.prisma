@@ -31,6 +31,7 @@ enum ProductStatus {
 
 enum OrderStatus {
   PENDING
+  AWAITING_DEPOSIT
   CONFIRMED
   IN_PRODUCTION
   READY
@@ -38,10 +39,18 @@ enum OrderStatus {
   CANCELLED
 }
 
-enum AbstractStyle {
-  MINIMALIST
+// Drives which price table applies (see src/lib/pricing.ts): PORTRAIT uses
+// the Portrait table, the other three share the Abstract table.
+enum ProductCategory {
+  PORTRAIT
+  GEOMETRIC
+  MINIMALISTIC
   FIGURATIVE
-  GEOMETRIC_ABSTRACT
+}
+
+enum DeliveryZone {
+  KADUNA
+  OUTSIDE
 }
 
 model User {
@@ -66,33 +75,26 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-model Category {
-  id       String    @id @default(cuid())
-  pillar   Pillar
-  name     String
-  slug     String    @unique
-  products Product[]
-}
-
 model Product {
-  id            String         @id @default(cuid())
-  categoryId    String
-  category      Category       @relation(fields: [categoryId], references: [id])
-  pillar        Pillar
-  name          String
-  slug          String         @unique
-  description   String
-  basePrice     Int            // stored in kobo to avoid float rounding
-  status        ProductStatus  @default(DRAFT)
-  archiveCode   String?        // Zenom Archive numbering, e.g. "ZS-001"
-  abstractStyle AbstractStyle?
-  images        ProductImage[]
-  orderItems    OrderItem[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id          String          @id @default(cuid())
+  // Derived from `category` on write (PORTRAIT -> PORTRAITS, the rest ->
+  // ABSTRACT); kept so storefront queries and SPACES gating stay simple.
+  pillar      Pillar
+  category    ProductCategory @default(PORTRAIT)
+  name        String
+  slug        String          @unique
+  description String
+  // No per-product price: every piece is priced from src/lib/pricing.ts
+  // (category table x size + optional framing).
+  status      ProductStatus   @default(DRAFT)
+  archiveCode String?         // Zenom Archive numbering, e.g. "ZS-001"
+  images      ProductImage[]
+  orderItems  OrderItem[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   @@index([pillar, status])
-  @@index([slug])
+  @@index([category, status])
 }
 
 model ProductImage {
@@ -106,56 +108,65 @@ model ProductImage {
   @@index([productId])
 }
 
-// Portrait customization: 7 sizes x 2 background tracks
+// The 6 available sizes (seeded from SIZES in src/lib/pricing.ts). Prices
+// live in pricing.ts, not here. New order items snapshot the size label +
+// index directly; sizeId is kept only so pre-redesign orders stay linked.
 model PortraitSize {
-  id            String      @id @default(cuid())
-  label         String      // "6x8" ... "24x36"
-  priceModifier Int         @default(0)
-  orderItems    OrderItem[]
-}
-
-model BackgroundTrack {
-  id            String      @id @default(cuid())
-  label         String      // "Plain" | "Detailed"
-  priceModifier Int         @default(0)
-  orderItems    OrderItem[]
+  id         String      @id @default(cuid())
+  label      String      // "8×12" ... "24×36"
+  widthIn    Int
+  heightIn   Int
+  sortOrder  Int         @default(0)
+  orderItems OrderItem[]
 }
 
 model Order {
-  id              String      @id @default(cuid())
-  orderNumber     String      @unique // e.g. "ZS-0001"
+  id              String       @id @default(cuid())
+  orderNumber     String       @unique // "ZS-0001"
   userId          String?
-  user            User?       @relation(fields: [userId], references: [id])
-  status          OrderStatus @default(PENDING)
+  user            User?        @relation(fields: [userId], references: [id])
+  status          OrderStatus  @default(PENDING)
   customerName    String
   customerEmail   String
   customerPhone   String
   deliveryAddress String
   notes           String?
-  totalAmount     Int
+  // All money in kobo, recomputed server-side from src/lib/pricing.ts.
+  delivery        DeliveryZone @default(KADUNA)
+  deliveryFee     Int          @default(0)
+  subtotal        Int          @default(0)
+  total           Int
+  deposit         Int          @default(0) // 50% non-refundable
   items           OrderItem[]
-  emailSent       Boolean     @default(false)
-  whatsappOpened  Boolean     @default(false)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  emailSent       Boolean      @default(false)
+  whatsappOpened  Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   @@index([userId])
   @@index([status])
 }
 
 model OrderItem {
-  id                String           @id @default(cuid())
-  orderId           String
-  order             Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId         String
-  product           Product          @relation(fields: [productId], references: [id])
-  sizeId            String?
-  size              PortraitSize?    @relation(fields: [sizeId], references: [id])
-  backgroundTrackId String?
-  backgroundTrack   BackgroundTrack? @relation(fields: [backgroundTrackId], references: [id])
-  quantity          Int              @default(1)
-  notes             String?
-  subtotal          Int
+  id           String        @id @default(cuid())
+  orderId      String
+  order        Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product       @relation(fields: [productId], references: [id])
+  // Legacy link (pre-redesign orders only); new items leave this null.
+  sizeId       String?
+  size         PortraitSize? @relation(fields: [sizeId], references: [id])
+  sizeLabel    String?       // e.g. "16×20" (legacy rows: "16x20")
+  sizeIndex    Int?          // 0-5 into SIZES; null for legacy sizes with no equivalent
+  framed       Boolean       @default(false)
+  // Extra people on a portrait: +10,000 each after the first.
+  subjectCount Int           @default(1)
+  notes        String?
+  // Per-item price snapshot in kobo (artwork + framing + extra subjects).
+  unitPrice    Int           @default(0)
+  // Legacy columns, kept so old orders stay readable. New orders: quantity 1, subtotal = unitPrice.
+  quantity     Int           @default(1)
+  subtotal     Int           @default(0)
 
   @@index([orderId])
 }

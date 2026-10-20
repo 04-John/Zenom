@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ZenomSpinner } from "@/components/brand/ZenomSpinner";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 
-// Products can be pre-seeded under pillar ABSTRACT / SPACES with status
-// COMING_SOON while those pillars are gated — the storefront query for
-// those pillars filters to AVAILABLE only, so this never leaks early.
+// The pillar (Portraits / Abstract) is derived from the category on the
+// server; the category also decides which price table applies.
 export function ProductForm({ initial }: { initial?: any }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -15,8 +15,7 @@ export function ProductForm({ initial }: { initial?: any }) {
     name: initial?.name ?? "",
     slug: initial?.slug ?? "",
     description: initial?.description ?? "",
-    basePrice: initial?.basePrice ? initial.basePrice / 100 : 0,
-    pillar: initial?.pillar ?? "PORTRAITS",
+    category: initial?.category ?? "PORTRAIT",
     status: initial?.status ?? "DRAFT",
     archiveCode: initial?.archiveCode ?? "",
     imageUrl: initial?.images?.[0]?.url ?? "",
@@ -75,7 +74,6 @@ export function ProductForm({ initial }: { initial?: any }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...form,
-        basePrice: Math.round(form.basePrice * 100),
         imageUrl: form.imageUrl || undefined,
       }),
     });
@@ -100,43 +98,50 @@ export function ProductForm({ initial }: { initial?: any }) {
       <Field label="Slug" value={form.slug} onChange={(v) => setForm({ ...form, slug: v })} />
       <Field label="Archive Code (e.g. ZS-001)" value={form.archiveCode} onChange={(v) => setForm({ ...form, archiveCode: v })} />
       <Field label="Description" value={form.description} onChange={(v) => setForm({ ...form, description: v })} textarea />
-      <Field label="Base Price (₦)" type="number" value={String(form.basePrice)} onChange={(v) => setForm({ ...form, basePrice: Number(v) })} />
+      <p className="text-xs text-ink-3">
+        No price field here — prices come from the category and size tables in src/lib/pricing.ts, never per-product.
+      </p>
 
       <label className="block">
-        <span className="text-sm font-medium text-navy">Product Image</span>
+        <span className="label-mono">Product Image</span>
         {form.imageUrl && (
           // eslint-disable-next-line @next/next/no-img-element -- admin preview of an arbitrary Cloudinary URL, not a storefront-optimized image
-          <img src={form.imageUrl} alt="" className="mt-2 h-32 w-32 rounded-card object-cover" />
+          <img src={form.imageUrl} alt="" className="mt-2 h-32 w-32 rounded-tile object-cover" />
         )}
         <input
           type="file"
           accept="image/*"
           onChange={handleImageSelect}
           disabled={uploading}
-          className="mt-2 block w-full text-sm text-charcoal/70"
+          className="mt-2 block w-full text-sm text-ink-2 file:mr-3 file:rounded-pill file:border file:border-ink/25 file:bg-transparent file:px-4 file:py-2 file:text-sm file:text-ink"
         />
-        {uploading && <p className="mt-1 text-xs text-charcoal/50">Uploading…</p>}
+        {uploading && (
+          <div className="mt-2">
+            <ZenomSpinner size={40} label="Uploading" />
+          </div>
+        )}
       </label>
 
       <label className="block">
-        <span className="text-sm font-medium text-navy">Pillar</span>
+        <span className="label-mono">Category</span>
         <select
-          value={form.pillar}
-          onChange={(e) => setForm({ ...form, pillar: e.target.value })}
-          className="mt-1 w-full rounded-btn border border-charcoal/20 p-3 text-sm"
+          value={form.category}
+          onChange={(e) => setForm({ ...form, category: e.target.value })}
+          className="field mt-2"
         >
-          <option value="PORTRAITS">Portraits</option>
-          <option value="ABSTRACT">Abstract (pre-seed, gated)</option>
-          <option value="SPACES">Spaces (pre-seed, gated)</option>
+          <option value="PORTRAIT">Portrait (Portrait price table)</option>
+          <option value="GEOMETRIC">Geometric (Abstract price table)</option>
+          <option value="MINIMALISTIC">Minimalistic (Abstract price table)</option>
+          <option value="FIGURATIVE">Figurative (Abstract price table)</option>
         </select>
       </label>
 
       <label className="block">
-        <span className="text-sm font-medium text-navy">Status</span>
+        <span className="label-mono">Status</span>
         <select
           value={form.status}
           onChange={(e) => setForm({ ...form, status: e.target.value })}
-          className="mt-1 w-full rounded-btn border border-charcoal/20 p-3 text-sm"
+          className="field mt-2"
         >
           <option value="DRAFT">Draft</option>
           <option value="AVAILABLE">Available</option>
@@ -145,7 +150,7 @@ export function ProductForm({ initial }: { initial?: any }) {
         </select>
       </label>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-ember">{error}</p>}
       <Button type="submit" loading={saving} disabled={uploading}>
         Save Product
       </Button>
@@ -156,11 +161,11 @@ export function ProductForm({ initial }: { initial?: any }) {
 function Field({ label, value, onChange, type = "text", textarea }: { label: string; value: string; onChange: (v: string) => void; type?: string; textarea?: boolean }) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-navy">{label}</span>
+      <span className="label-mono">{label}</span>
       {textarea ? (
-        <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={3} className="mt-1 w-full rounded-btn border border-charcoal/20 p-3 text-sm" />
+        <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={3} className="field mt-2" />
       ) : (
-        <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 w-full rounded-btn border border-charcoal/20 p-3 text-sm" />
+        <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className="field mt-2" />
       )}
     </label>
   );

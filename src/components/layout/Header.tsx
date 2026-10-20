@@ -1,88 +1,81 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { ShoppingBag, UserRound, Menu, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useCart } from "@/context/CartContext";
+import { BAG_BUTTON_ID } from "@/components/cart/AddToBagFly";
+import { ZenomNavLogo } from "@/components/brand/ZenomLockup";
 import { MobileNav } from "./MobileNav";
+import { NAV_LINKS } from "./nav-links";
 
-const ABSTRACT_LIVE = process.env.NEXT_PUBLIC_ABSTRACT_LIVE === "true";
-const SPACES_LIVE = process.env.NEXT_PUBLIC_SPACES_LIVE === "true";
-
-// Header begins transparent over the hero and transitions to a solid
-// navy background after scrolling — subtle, not jarring.
+// Floating blurred pill, fixed 18px from the top. Under 900px it collapses to
+// logo + Bag + Menu, with the links moving into a full-screen overlay.
 export function Header() {
-  const [scrolled, setScrolled] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const pathname = usePathname();
   const { items } = useCart();
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  useEffect(() => setMenuOpen(false), [pathname]);
+
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
   return (
     <>
-      <motion.header
-        className="fixed top-0 z-50 w-full transition-colors duration-300"
-        style={{
-          backgroundColor: scrolled ? "#0E1A2B" : "transparent",
-        }}
-      >
-        <div className="mx-auto flex max-w-container items-center justify-between px-6 py-5 lg:px-10">
-          <Link href="/" className="font-display text-xl tracking-widest text-ivory">
-            ZENOM STUDIO
+      <div className="pointer-events-none fixed inset-x-0 top-[18px] z-[900] flex justify-center px-4">
+        <nav
+          aria-label="Main"
+          className="pointer-events-auto flex items-center gap-1.5 rounded-pill border border-ink/10 bg-[rgba(24,21,18,0.72)] py-1.5 pl-2 pr-1.5 shadow-nav backdrop-blur-[18px]"
+        >
+          <Link href="/" className="flex items-center py-0.5 pr-3 text-ink hover:text-ink">
+            <ZenomNavLogo />
           </Link>
 
-          <nav className="hidden items-center gap-10 lg:flex">
-            <Link href="/portraits" className="text-sm tracking-wide text-ivory hover:text-copper">
-              Portraits
-            </Link>
-            <NavLink href="/abstract" label="Abstract" live={ABSTRACT_LIVE} />
-            <NavLink href="/spaces" label="Spaces" live={SPACES_LIVE} />
-          </nav>
+          <div className="hidden items-center gap-0.5 min-[900px]:flex">
+            {NAV_LINKS.map((l) => (
+              <Link
+                key={l.href}
+                href={l.href}
+                className={`flex items-center gap-1.5 rounded-pill px-3.5 py-[9px] text-[13px] font-medium text-ink transition-colors hover:bg-ink/[0.08] hover:text-ink ${
+                  isActive(l.href) ? "bg-ink/10" : ""
+                }`}
+              >
+                {l.label}
+                {l.soon && <span className="font-mono text-[9px] tracking-[0.1em] text-ember">SOON</span>}
+              </Link>
+            ))}
+          </div>
 
-          <div className="flex items-center gap-5">
-            <Link href="/account" aria-label="Account" className="text-ivory hover:text-copper">
-              <UserRound size={20} />
+          <div className="ml-1.5 flex gap-1">
+            <Link
+              href="/account"
+              className="hidden rounded-pill border border-ink/15 px-4 py-[9px] text-[13px] text-ink transition-colors hover:border-ink/40 hover:text-ink min-[900px]:block"
+            >
+              Account
             </Link>
-            <Link href="/cart" aria-label="Order bag" className="relative text-ivory hover:text-copper">
-              <ShoppingBag size={20} />
-              {items.length > 0 && (
-                <span className="absolute -right-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-copper text-[10px] text-ivory">
-                  {items.length}
-                </span>
-              )}
+            <Link
+              id={BAG_BUTTON_ID}
+              href="/cart"
+              className="flex items-center gap-2 rounded-pill bg-ink px-4 py-[9px] text-[13px] font-semibold text-night transition-colors hover:bg-ember hover:text-night"
+            >
+              Bag
+              <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-pill bg-night px-1.5 text-[11px] font-medium text-ink">
+                {items.length}
+              </span>
             </Link>
             <button
-              aria-label="Menu"
-              className="text-ivory lg:hidden"
-              onClick={() => setMobileOpen(true)}
+              type="button"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((o) => !o)}
+              className="rounded-pill border border-ink/15 px-4 py-[9px] text-[13px] text-ink min-[900px]:hidden"
             >
-              <Menu size={22} />
+              {menuOpen ? "Close" : "Menu"}
             </button>
           </div>
-        </div>
-      </motion.header>
+        </nav>
+      </div>
 
-      <MobileNav open={mobileOpen} onClose={() => setMobileOpen(false)} />
+      <MobileNav open={menuOpen} onNavigate={() => setMenuOpen(false)} />
     </>
-  );
-}
-
-function NavLink({ href, label, live }: { href: string; label: string; live: boolean }) {
-  if (!live) {
-    return (
-      <span className="cursor-not-allowed text-sm tracking-wide text-ivory/40">
-        {label} <span className="text-[10px] uppercase text-copper/70">· Soon</span>
-      </span>
-    );
-  }
-  return (
-    <Link href={href} className="text-sm tracking-wide text-ivory hover:text-copper">
-      {label}
-    </Link>
   );
 }

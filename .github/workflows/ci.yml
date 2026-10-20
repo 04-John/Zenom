@@ -19,6 +19,7 @@ jobs:
       - run: npx prisma generate
       - run: npm run lint
       - run: npm run typecheck
+      - run: npm run test:pricing
       - run: npm run build
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

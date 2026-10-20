@@ -10,18 +10,18 @@ export const metadata = { title: "Privacy Policy | Zenom Studio" };
 // updated" date and this list whenever a new integration is added.
 export default function PrivacyPolicyPage() {
   return (
-    <div className="mx-auto max-w-2xl px-6 py-16 lg:px-10">
-      <h1 className="font-display text-4xl text-navy">Privacy Policy</h1>
-      <p className="mt-2 text-sm text-charcoal/50">Last updated: 30 September 2026</p>
+    <div className="mx-auto max-w-2xl px-6 pb-24 pt-[140px] lg:px-10">
+      <h1 className="h-page" style={{ fontSize: "clamp(44px, 7vw, 80px)" }}>Privacy Policy</h1>
+      <p className="label-mono mt-5">Last updated: 30 September 2026</p>
 
-      <div className="mt-10 space-y-8 text-sm leading-relaxed text-charcoal/80">
+      <div className="mt-12 space-y-10 text-[15px] leading-[1.7] text-ink-2">
         <Section title="Who we are">
           <p>
             Zenom Studio (&ldquo;we&rdquo;, &ldquo;us&rdquo;) offers commissioned charcoal and pencil
             portraits made to order. This policy explains what personal information we collect through
             zenomstudio.com (the &ldquo;Site&rdquo;), why we collect it, and who we share it with. Contact
             us at{" "}
-            <a href="mailto:zenomart.studio@gmail.com" className="text-copper underline">
+            <a href="mailto:zenomart.studio@gmail.com" className="text-ember underline">
               zenomart.studio@gmail.com
             </a>{" "}
             with any question or request about your data. We process personal data in accordance with the
@@ -34,7 +34,7 @@ export default function PrivacyPolicyPage() {
             <li>Account details: name and email address, if you create an account.</li>
             <li>
               Order details: name, email, phone number, delivery address, order notes, and the items you
-              order (size, background style, quantity).
+              order (size, framing, quantity).
             </li>
             <li>
               Reference images you submit for a commission, once the upload feature is live (currently
@@ -68,20 +68,20 @@ export default function PrivacyPolicyPage() {
           <p>We use the following third-party services to run the Site. Each only receives what it needs to do its job:</p>
           <ul className="mt-2 list-disc space-y-1 pl-5">
             <li>
-              <strong>Neon</strong> (database hosting, USA) — stores your account and order records.
+              <strong className="font-semibold text-ink">Neon</strong> (database hosting, USA) — stores your account and order records.
             </li>
             <li>
-              <strong>Resend</strong> (email delivery) — sends order confirmation emails on our behalf.
+              <strong className="font-semibold text-ink">Resend</strong> (email delivery) — sends order confirmation emails on our behalf.
             </li>
             <li>
-              <strong>Cloudinary</strong> (image hosting) — stores product and reference images.
+              <strong className="font-semibold text-ink">Cloudinary</strong> (image hosting) — stores product and reference images.
             </li>
             <li>
-              <strong>Sentry</strong> (error monitoring) — receives technical error reports to help us fix
+              <strong className="font-semibold text-ink">Sentry</strong> (error monitoring) — receives technical error reports to help us fix
               bugs; configured not to collect user identity, cookies, or request bodies.
             </li>
             <li>
-              <strong>WhatsApp / Meta</strong> — after you place an order, we hand off order details to
+              <strong className="font-semibold text-ink">WhatsApp / Meta</strong> — after you place an order, we hand off order details to
               WhatsApp to confirm your commission with you directly. WhatsApp&rsquo;s own privacy policy
               applies to that conversation.
             </li>
@@ -115,13 +115,13 @@ export default function PrivacyPolicyPage() {
           <p>
             Under Part VI of the NDPA, you can ask us to confirm what we hold about you, access or export a
             copy of it, correct it, restrict or object to its processing, or erase it, by emailing{" "}
-            <a href="mailto:zenomart.studio@gmail.com" className="text-copper underline">
+            <a href="mailto:zenomart.studio@gmail.com" className="text-ember underline">
               zenomart.studio@gmail.com
             </a>
             . We&rsquo;ll respond within a reasonable time. Deleting your data may mean we can no longer
             fulfil an order in progress. If you&rsquo;re not satisfied with how we&rsquo;ve handled a
             request, you can lodge a complaint with the{" "}
-            <strong>Nigeria Data Protection Commission (NDPC)</strong> under NDPA s.46.
+            <strong className="font-semibold text-ink">Nigeria Data Protection Commission (NDPC)</strong> under NDPA s.46.
           </p>
         </Section>
 
@@ -162,7 +162,7 @@ export default function PrivacyPolicyPage() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h2 className="font-display text-xl text-navy">{title}</h2>
+      <h2 className="font-display text-2xl italic text-ink">{title}</h2>
       <div className="mt-2">{children}</div>
     </section>
   );

@@ -1,13 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { productSchema } from "@/lib/validation";
+import { fromDbCategory, pillarFor } from "@/lib/pricing";
 
+// Public listing. Filter with ?category=PORTRAIT|GEOMETRIC|MINIMALISTIC|FIGURATIVE
+// or ?pillar=PORTRAITS|ABSTRACT (default PORTRAITS). Prices are not part of
+// the product — they come from src/lib/pricing.ts.
 export async function GET(req: NextRequest) {
+  const category = req.nextUrl.searchParams.get("category");
   const pillar = req.nextUrl.searchParams.get("pillar") ?? "PORTRAITS";
 
   const products = await prisma.product.findMany({
-    where: { pillar: pillar as any, status: { in: ["AVAILABLE", "SOLD_OUT"] } },
-    include: { images: { orderBy: { order: "asc" }, take: 1 } },
+    where: {
+      ...(category ? { category: category as any } : { pillar: pillar as any }),
+      status: { in: ["AVAILABLE", "SOLD_OUT"] },
+    },
+    select: {
+      id: true,
+      slug: true,
+      name: true,
+      description: true,
+      category: true,
+      pillar: true,
+      status: true,
+      archiveCode: true,
+      images: { orderBy: { order: "asc" }, take: 1, select: { url: true, alt: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
 
@@ -27,19 +45,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Please check the form and try again." }, { status: 400 });
   }
 
-  // A default Category per pillar is assumed to exist (seeded) —
-  // in a fuller build this would resolve/select a real categoryId.
-  const category = await prisma.category.findFirst({ where: { pillar: parsed.data.pillar } });
-  if (!category) {
-    return NextResponse.json({ error: "No category found for this pillar. Seed categories first." }, { status: 400 });
-  }
-
   const { imageUrl, ...productData } = parsed.data;
 
   const product = await prisma.product.create({
     data: {
       ...productData,
-      categoryId: category.id,
+      pillar: pillarFor(fromDbCategory(productData.category)),
       ...(imageUrl && { images: { create: [{ url: imageUrl, alt: productData.name, order: 0 }] } }),
     },
   });

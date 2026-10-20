@@ -10,13 +10,17 @@ import { withSentryConfig } from "@sentry/nextjs/config";
 // Next.js hydration and React's inline `style` attributes need it
 // without a nonce-based setup; tightening that further would need
 // middleware-issued nonces, which hasn't been verified against a live
-// browser here.
+// browser here. 'unsafe-eval' is added only in development: Next's dev
+// server (React Refresh, eval-based source maps) needs it to run at all,
+// but the production build never calls eval, so the production CSP stays
+// at the stricter policy.
 const csp = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https://res.cloudinary.com https://*.netlify.app",
   "font-src 'self' data:",
+  "worker-src 'self' blob:",
   "connect-src 'self' https://api.cloudinary.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",
@@ -26,6 +30,9 @@ const csp = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
+    // AVIF first, WebP fallback; artwork files never change under the same name.
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 60 * 60 * 24 * 30,
     remotePatterns: [
       { protocol: "https", hostname: "res.cloudinary.com" },
       { protocol: "https", hostname: "*.netlify.app" },

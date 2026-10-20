@@ -2,13 +2,16 @@
 
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { X } from "lucide-react";
+import { useScrollLock } from "@/components/motion/LenisProvider";
+import { NAV_LINKS } from "./nav-links";
 
-const ABSTRACT_LIVE = process.env.NEXT_PUBLIC_ABSTRACT_LIVE === "true";
-const SPACES_LIVE = process.env.NEXT_PUBLIC_SPACES_LIVE === "true";
+const LINKS = [{ href: "/", label: "Home" }, ...NAV_LINKS, { href: "/account", label: "Account" }];
 
-// Full-screen mobile nav — never a cramped dropdown.
-export function MobileNav({ open, onClose }: { open: boolean; onClose: () => void }) {
+// Full-screen menu overlay under 900px (44px italic serif links). Scroll is
+// paused while it is open.
+export function MobileNav({ open, onNavigate }: { open: boolean; onNavigate: () => void }) {
+  useScrollLock(open);
+
   return (
     <AnimatePresence>
       {open && (
@@ -16,29 +19,25 @@ export function MobileNav({ open, onClose }: { open: boolean; onClose: () => voi
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[60] flex flex-col bg-navy px-8 py-8"
+          transition={{ duration: 0.3 }}
+          className="fixed inset-0 z-[850] flex flex-col justify-center gap-2 bg-[rgba(18,16,14,0.96)] px-8 py-10 backdrop-blur-[10px] min-[900px]:hidden"
         >
-          <button
-            aria-label="Close menu"
-            onClick={onClose}
-            className="self-end text-ivory min-h-[44px] min-w-[44px]"
-          >
-            <X size={26} />
-          </button>
-          <nav className="mt-12 flex flex-1 flex-col gap-8">
-            <Link href="/portraits" onClick={onClose} className="font-display text-3xl text-ivory">
-              Portraits
-            </Link>
-            <span className="font-display text-3xl text-ivory/40">
-              Abstract {!ABSTRACT_LIVE && <span className="text-sm text-copper align-middle"> Soon</span>}
-            </span>
-            <span className="font-display text-3xl text-ivory/40">
-              Spaces {!SPACES_LIVE && <span className="text-sm text-copper align-middle"> Soon</span>}
-            </span>
-            <Link href="/account" onClick={onClose} className="mt-auto text-ivory/70">
-              My Account
-            </Link>
-          </nav>
+          {LINKS.map((l, i) => (
+            <motion.div
+              key={l.href}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05 + i * 0.04, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <Link
+                href={l.href}
+                onClick={onNavigate}
+                className="block border-b border-ink/10 py-2.5 font-display text-[44px] italic leading-tight text-ink"
+              >
+                {l.label}
+              </Link>
+            </motion.div>
+          ))}
         </motion.div>
       )}
     </AnimatePresence>

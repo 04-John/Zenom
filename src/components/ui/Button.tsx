@@ -1,40 +1,65 @@
 "use client";
 
-import { ButtonHTMLAttributes, forwardRef } from "react";
+import { ButtonHTMLAttributes, forwardRef, useCallback, useLayoutEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { cn } from "@/lib/cn";
+import { ZenomSpinner } from "@/components/brand/ZenomSpinner";
+import { buttonClass, type ButtonVariant } from "@/lib/button-class";
 
-type Variant = "primary" | "secondary" | "ghost";
+export { buttonClass };
+export type { ButtonVariant };
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: Variant;
+  variant?: ButtonVariant;
   loading?: boolean;
 }
 
-const variants: Record<Variant, string> = {
-  primary: "bg-navy text-ivory hover:bg-navy-light",
-  secondary: "border border-navy text-navy hover:bg-navy hover:text-ivory",
-  ghost: "text-navy hover:text-copper",
+// Spinner line colour that contrasts with each variant's fill.
+const SPINNER_TONE: Record<ButtonVariant, "dark" | "paper"> = {
+  primary: "paper", // light pill
+  secondary: "dark",
+  ghost: "dark",
+  ember: "paper", // ember pill
+  paper: "dark", // dark pill
 };
 
 // Buttons acknowledge interaction immediately: subtle press scale +
-// disabled/loading state text swap, never waiting on an animation
-// before confirming the action actually happened.
+// the Zenom mark drawing in place of the label while pending. The width is
+// locked on the transition to loading so the button never jumps.
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "primary", loading, disabled, children, ...props }, ref) => {
+  ({ className, variant = "primary", loading, disabled, children, style, ...props }, ref) => {
+    const innerRef = useRef<HTMLButtonElement | null>(null);
+    const widthRef = useRef<number | undefined>(undefined);
+
+    const setRefs = useCallback(
+      (el: HTMLButtonElement | null) => {
+        innerRef.current = el;
+        if (typeof ref === "function") ref(el);
+        else if (ref) ref.current = el;
+      },
+      [ref]
+    );
+
+    // Remember the label's width while idle; when loading flips on, the
+    // button keeps that width (the label is already gone from the DOM then).
+    useLayoutEffect(() => {
+      if (!loading) {
+        const w = innerRef.current?.getBoundingClientRect().width;
+        if (w) widthRef.current = Math.ceil(w);
+      }
+    });
+    const lockedWidth = loading ? widthRef.current : undefined;
+
     return (
       <motion.button
-        ref={ref}
+        ref={setRefs}
         whileTap={{ scale: 0.97 }}
         disabled={disabled || loading}
-        className={cn(
-          "inline-flex items-center justify-center gap-2 rounded-btn px-6 py-3 text-sm font-medium tracking-wide transition-colors duration-150 disabled:opacity-50 disabled:pointer-events-none min-h-[44px]",
-          variants[variant],
-          className
-        )}
+        aria-busy={loading || undefined}
+        className={buttonClass(variant, loading ? `${className ?? ""} disabled:opacity-100` : className)}
+        style={lockedWidth ? { ...style, minWidth: lockedWidth } : style}
         {...(props as any)}
       >
-        {loading ? "Please wait…" : children}
+        {loading ? <ZenomSpinner size={20} tone={SPINNER_TONE[variant]} /> : children}
       </motion.button>
     );
   }

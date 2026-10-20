@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ZenomSpinner } from "@/components/brand/ZenomSpinner";
 import { useToast } from "@/components/ui/Toast";
 
 // "Archiving" sets status back to DRAFT rather than deleting the row —
@@ -37,9 +38,17 @@ export function ArchiveProductButton({ productId, status }: { productId: string;
     <button
       onClick={handleClick}
       disabled={loading}
-      className="text-charcoal/60 underline hover:text-copper disabled:opacity-50"
+      className="text-ink-2 underline hover:text-ember disabled:opacity-50"
     >
-      {isArchived ? "Restore" : "Archive"}
+      {loading ? (
+        <span className="inline-flex min-w-[52px] justify-center">
+          <ZenomSpinner size={20} />
+        </span>
+      ) : isArchived ? (
+        "Restore"
+      ) : (
+        "Archive"
+      )}
     </button>
   );
 }

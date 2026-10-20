@@ -1,27 +1,27 @@
-import { Reveal } from "@/components/motion/Reveal";
+import { getArtworks } from "@/lib/artworks";
+import { ProductGrid } from "@/components/product/ProductGrid";
+import { PageIntro } from "@/components/motion/PageIntro";
+import { galleryFilters, galleryIntro, parseStyle } from "@/components/product/gallery";
 
-export const metadata = { title: "Zenom Abstract | Coming Soon" };
+export const metadata = { title: "Abstract | Zenom Studio" };
 
-// Real route, real brand content — but no product listing, no pricing,
-// no cart entry point. Flip NEXT_PUBLIC_ABSTRACT_LIVE (or the DB-backed
-// settings flag) when the gallery and pricing are finalized.
-export default function AbstractComingSoonPage() {
+// Product listing changes via the admin panel — never statically cache it.
+export const dynamic = "force-dynamic";
+
+// `?style=geometric|minimalistic|figurative` picks the opening sub-filter;
+// further filtering happens client-side.
+export default async function AbstractPage({ searchParams }: { searchParams: { style?: string | string[] } }) {
+  const all = await getArtworks();
+  const abstract = all.filter((a) => a.category !== "portrait");
+  const key = parseStyle(searchParams.style);
+  const shown = key === "all" ? abstract : abstract.filter((a) => a.category === key);
+  const { filters, info } = galleryFilters(all, "abstract");
+  const intro = galleryIntro(key, abstract.length);
+
   return (
-    <div className="flex min-h-[70vh] items-center justify-center bg-navy px-6 text-center">
-      <Reveal>
-        <p className="text-sm uppercase tracking-[0.3em] text-copper">Zenom Abstract</p>
-        <h1 className="mt-4 font-display text-4xl text-ivory lg:text-5xl">Coming Soon</h1>
-        <p className="mx-auto mt-6 max-w-md text-ivory/70">
-          Pencil and color-pencil recreations of your favourite reference art —
-          minimalist, figurative, and geometric abstract pieces, made to order.
-        </p>
-        <a
-          href="https://wa.me/2349048528199?text=I'd%20like%20to%20be%20notified%20when%20Zenom%20Abstract%20launches"
-          className="mt-8 inline-block text-sm text-copper underline"
-        >
-          Get notified on WhatsApp
-        </a>
-      </Reveal>
-    </div>
+    <>
+      <PageIntro {...intro} images={shown.slice(0, 5).map((a) => a.imageUrl)} />
+      <ProductGrid products={abstract} filters={filters} info={info} initialFilter={key} />
+    </>
   );
 }

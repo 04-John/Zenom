@@ -15,8 +15,8 @@ export default async function EditProductPage({ params }: { params: { id: string
   if (!product) notFound();
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-16">
-      <h1 className="font-display text-3xl text-navy">Edit Product</h1>
+    <div className="mx-auto max-w-2xl px-6 pb-24 pt-[140px]">
+      <h1 className="h-section">Edit Product</h1>
       <ProductForm initial={product} />
     </div>
   );

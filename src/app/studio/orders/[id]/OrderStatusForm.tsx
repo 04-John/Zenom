@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ZenomSpinner } from "@/components/brand/ZenomSpinner";
+import { statusLabel } from "../../StatusBadge";
 
-const STATUSES = ["PENDING", "CONFIRMED", "IN_PRODUCTION", "READY", "COMPLETED", "CANCELLED"];
+const STATUSES = ["PENDING", "AWAITING_DEPOSIT", "CONFIRMED", "IN_PRODUCTION", "READY", "COMPLETED", "CANCELLED"];
 
 export function OrderStatusForm({ orderId, currentStatus }: { orderId: string; currentStatus: string }) {
   const [status, setStatus] = useState(currentStatus);
@@ -23,20 +25,26 @@ export function OrderStatusForm({ orderId, currentStatus }: { orderId: string; c
   }
 
   return (
-    <div className="mt-6">
-      <label className="text-sm font-medium text-navy">Status</label>
+    <div className="mt-8">
+      <label htmlFor="order-status" className="label-mono">
+        Status
+      </label>
+      <div className="mt-2 flex items-center gap-3">
       <select
+        id="order-status"
         value={status}
         onChange={(e) => updateStatus(e.target.value)}
         disabled={saving}
-        className="mt-1 block w-full rounded-btn border border-charcoal/20 p-3 text-sm"
+        className="field block disabled:opacity-60"
       >
         {STATUSES.map((s) => (
           <option key={s} value={s}>
-            {s}
+            {s === "AWAITING_DEPOSIT" ? "Awaiting deposit" : statusLabel(s)}
           </option>
         ))}
       </select>
+      {saving && <ZenomSpinner size={20} />}
+      </div>
     </div>
   );
 }
