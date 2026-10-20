@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Instrument_Sans, Instrument_Serif, JetBrains_Mono } from "next/font/google";
+import "@/styles/fonts.css";
 import "@/styles/globals.css";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -12,26 +12,6 @@ import { ScrollProgress } from "@/components/motion/ScrollProgress";
 import { AddToBagFly } from "@/components/cart/AddToBagFly";
 import { CartProvider } from "@/context/CartContext";
 import { ToastProvider } from "@/components/ui/Toast";
-
-const display = Instrument_Serif({
-  subsets: ["latin"],
-  weight: "400",
-  style: ["normal", "italic"],
-  variable: "--font-display",
-  display: "swap",
-});
-const sans = Instrument_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-sans",
-  display: "swap",
-});
-const mono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-mono",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "Zenom Studio — More than a portrait",
@@ -57,8 +37,12 @@ const introGate = `try{if(sessionStorage.getItem('zenom.intro')==='1')document.d
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     // suppressHydrationWarning: the inline script below sets data-intro-seen before hydration.
-    <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`} suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Fonts are self-hosted (src/styles/fonts.css); preload the ones above the fold. */}
+        {["instrument-serif-latin-400-italic", "instrument-sans-latin-400-normal", "instrument-sans-latin-500-normal", "jetbrains-mono-latin-400-normal"].map((f) => (
+          <link key={f} rel="preload" as="font" type="font/woff2" href={`/fonts/${f}.woff2`} crossOrigin="anonymous" />
+        ))}
         <script dangerouslySetInnerHTML={{ __html: introGate }} />
       </head>
       <body>
