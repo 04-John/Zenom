@@ -43,7 +43,7 @@ async function main() {
     });
     created++;
   }
-  console.log(`Artworks: ${created} created, ${CATALOG.length - created} already present. Titles are PLACEHOLDERS — TODO: owner to rename.`);
+  console.log(`Artworks: ${created} created, ${CATALOG.length - created} already present (existing products are never renamed by the seed).`);
 
   // Admin user — no hardcoded default password. Set ADMIN_SEED_EMAIL /
   // ADMIN_SEED_PASSWORD in .env before seeding, or a random one-time

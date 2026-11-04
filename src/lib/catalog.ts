@@ -27,7 +27,7 @@ export const ART_GROUPS: ArtGroup[] = [
     label: "Portraits",
     medium: "Charcoal and graphite on paper",
     blurb: "Drawn by hand from your photograph, in your choice of size.",
-    titles: ["Blindfold", "Held Gaze", "Veil", "Sidelong Glance", "Quiet Smile", "Bright Grin", "Sun Gazer", "Matriarch", "Facets", "Shades, in Colour", "Shades, in Graphite"],
+    titles: ["Blindfold", "Held Gaze", "Veil", "Sidelong Glance", "Quiet Smile", "Bright Grin", "Sun Gazer", "Matriarch", "Facets", "Shades, in Colour", "Shades, in Graphite", "Greater Nigeria"],
   },
   {
     prefix: "g",
