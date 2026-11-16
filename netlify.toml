@@ -3,5 +3,6 @@
 
 [build.environment]
   NODE_VERSION = "20"
-  # Public Cloudinary image URLs contain the cloud name, which is not a secret.
-  SECRETS_SCAN_OMIT_PATHS = "src/lib/art-cloudinary.json"
+  # These values are public by design (site URL, public contact details, Sentry
+  # browser DSN, Cloudinary cloud name in image URLs). Real secrets stay scanned.
+  SECRETS_SCAN_OMIT_KEYS = "NEXTAUTH_URL,WHATSAPP_BUSINESS_NUMBER,ADMIN_SEED_EMAIL,SENTRY_DSN,CLOUDINARY_CLOUD_NAME"
