@@ -3,3 +3,5 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  # Public Cloudinary image URLs contain the cloud name, which is not a secret.
+  SECRETS_SCAN_OMIT_PATHS = "src/lib/art-cloudinary.json"
