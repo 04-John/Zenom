@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   title: "Zenom Studio — More than a portrait",
   description:
     "Commissioned charcoal, pencil and colour-pencil work, drawn by hand by Samuel in Kaduna. Portraits and abstract art, made to order.",
-  metadataBase: new URL("https://zenom-studio.netlify.app"),
+  metadataBase: new URL("https://zenomstudio.netlify.app"),
   icons: { icon: "/brand/icon.svg", apple: "/brand/apple-touch-icon.png" },
   openGraph: {
     images: [{ url: "/brand/og-badge.png", width: 1200, height: 630, alt: "Zenom Studio — More than a portrait" }],

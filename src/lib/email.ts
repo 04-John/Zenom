@@ -16,7 +16,7 @@ const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 // Email clients don't render SVG, so the header uses a PNG at an absolute URL.
-const SITE_URL = (process.env.NEXTAUTH_URL || "https://zenom-studio.netlify.app").replace(/\/$/, "");
+const SITE_URL = (process.env.NEXTAUTH_URL || "https://zenomstudio.netlify.app").replace(/\/$/, "");
 const emailHeader = () =>
   `<p style="margin:0 0 20px"><img src="${SITE_URL}/brand/zenom-mark-dark.png" alt="Zenom Studio" width="56" height="56" style="display:block;border:0" /></p>`;
 
