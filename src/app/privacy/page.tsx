@@ -21,8 +21,8 @@ export default function PrivacyPolicyPage() {
             portraits made to order. This policy explains what personal information we collect through
             zenomstudio.com (the &ldquo;Site&rdquo;), why we collect it, and who we share it with. Contact
             us at{" "}
-            <a href="mailto:zenomart.studio@gmail.com" className="text-ember underline">
-              zenomart.studio@gmail.com
+            <a href="mailto:zenomstudios@gmail.com" className="text-ember underline">
+              zenomstudios@gmail.com
             </a>{" "}
             with any question or request about your data. We process personal data in accordance with the
             Nigeria Data Protection Act, 2023 (NDPA).
@@ -115,8 +115,8 @@ export default function PrivacyPolicyPage() {
           <p>
             Under Part VI of the NDPA, you can ask us to confirm what we hold about you, access or export a
             copy of it, correct it, restrict or object to its processing, or erase it, by emailing{" "}
-            <a href="mailto:zenomart.studio@gmail.com" className="text-ember underline">
-              zenomart.studio@gmail.com
+            <a href="mailto:zenomstudios@gmail.com" className="text-ember underline">
+              zenomstudios@gmail.com
             </a>
             . We&rsquo;ll respond within a reasonable time. Deleting your data may mean we can no longer
             fulfil an order in progress. If you&rsquo;re not satisfied with how we&rsquo;ve handled a

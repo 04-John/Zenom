@@ -47,12 +47,19 @@ export async function POST(req: NextRequest) {
 
   const { imageUrl, ...productData } = parsed.data;
 
-  const product = await prisma.product.create({
-    data: {
-      ...productData,
-      pillar: pillarFor(fromDbCategory(productData.category)),
-      ...(imageUrl && { images: { create: [{ url: imageUrl, alt: productData.name, order: 0 }] } }),
-    },
-  });
-  return NextResponse.json(product, { status: 201 });
+  try {
+    const product = await prisma.product.create({
+      data: {
+        ...productData,
+        pillar: pillarFor(fromDbCategory(productData.category)),
+        ...(imageUrl && { images: { create: [{ url: imageUrl, alt: productData.name, order: 0 }] } }),
+      },
+    });
+    return NextResponse.json(product, { status: 201 });
+  } catch (e: any) {
+    if (e?.code === "P2002") {
+      return NextResponse.json({ error: "Another artwork already uses that slug. Change it and try again." }, { status: 409 });
+    }
+    throw e;
+  }
 }

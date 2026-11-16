@@ -18,13 +18,22 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const { imageUrl, ...productData } = parsed.data;
 
-  const product = await prisma.product.update({
-    where: { id: params.id },
-    data: {
-      ...productData,
-      ...(productData.category && { pillar: pillarFor(fromDbCategory(productData.category)) }),
-    },
-  });
+  let product;
+  try {
+    product = await prisma.product.update({
+      where: { id: params.id },
+      data: {
+        ...productData,
+        ...(productData.category && { pillar: pillarFor(fromDbCategory(productData.category)) }),
+      },
+    });
+  } catch (e: any) {
+    if (e?.code === "P2002") {
+      return NextResponse.json({ error: "Another artwork already uses that slug. Change it and try again." }, { status: 409 });
+    }
+    if (e?.code === "P2025") return NextResponse.json({ error: "Artwork not found." }, { status: 404 });
+    throw e;
+  }
 
   if (imageUrl) {
     const existing = await prisma.productImage.findFirst({

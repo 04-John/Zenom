@@ -16,6 +16,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   EmailNotVerified: "Please verify your email before signing in. Check your inbox for the link.",
   InvalidVerificationLink: "That verification link is invalid or has expired.",
   TooManyAttempts: "Too many attempts. Please wait a while before trying again.",
+  ServiceUnavailable: "We couldn't reach the database just now. Your details are fine, so wait a few seconds and try again.",
 };
 
 // Split image + auth panel. /account, /login and /signup all render this;
@@ -59,7 +60,15 @@ function AuthPanelInner({ initialTab }: { initialTab: Tab }) {
       return;
     }
 
-    router.push("/account");
+    // Admins land in the studio dashboard, everyone else in their account.
+    let dest = "/account";
+    try {
+      const session = await fetch("/api/auth/session").then((r) => r.json());
+      if (session?.user?.role === "ADMIN") dest = "/studio";
+    } catch {
+      /* fall back to /account */
+    }
+    router.push(dest);
     router.refresh();
   }
 

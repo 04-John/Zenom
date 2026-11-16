@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { CONTACT_EMAIL } from "@/lib/site";
 import {
   additionalSubjectsPrice,
   artworkPrice,
@@ -77,6 +78,35 @@ function breakdownHtml(p: OrderEmailInput): string {
   return `<ul>${rows}</ul>
 <p>Subtotal: ${formatNaira(p.subtotal)}<br>${delivery}<br><strong>Total: ${formatNaira(p.total)}</strong></p>
 <p>A 50% non-refundable deposit of <strong>${formatNaira(p.deposit)}</strong> is required before production begins.</p>`;
+}
+
+// Contact-form message -> the studio inbox. replyTo is the visitor, so hitting
+// "Reply" in Gmail answers them directly.
+export async function sendContactMessage(params: { name: string; email: string; phone?: string; message: string }) {
+  if (!resend) {
+    console.warn("RESEND_API_KEY not set — contact message not sent");
+    return { sent: false };
+  }
+  try {
+    const { error } = await resend.emails.send({
+      from: "Zenom Studio <orders@zenomstudio.com>",
+      to: process.env.CONTACT_NOTIFICATION_EMAIL || CONTACT_EMAIL,
+      reply_to: params.email,
+      subject: `Website message from ${params.name}`,
+      html: `${emailHeader()}<p><strong>${escapeHtml(params.name)}</strong> (${escapeHtml(params.email)}${
+        params.phone ? `, ${escapeHtml(params.phone)}` : ""
+      }) wrote:</p><p style="white-space:pre-wrap">${escapeHtml(params.message)}</p>`,
+    });
+    // The Resend SDK returns failures (e.g. unverified domain) instead of throwing.
+    if (error) {
+      console.error("Contact email failed:", error);
+      return { sent: false, error };
+    }
+    return { sent: true };
+  } catch (err) {
+    console.error("Contact email failed:", err);
+    return { sent: false, error: err };
+  }
 }
 
 // Email failures must never make an order disappear — persist the order

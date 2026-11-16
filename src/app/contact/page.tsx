@@ -4,13 +4,14 @@ import { Reveal } from "@/components/motion/Reveal";
 import { ContactForm } from "./ContactForm";
 import { art } from "@/lib/catalog";
 import { WHATSAPP_NUMBER } from "@/lib/pricing";
+import { CONTACT_EMAIL } from "@/lib/site";
 
 export const metadata = { title: "Contact | Zenom Studio" };
 
 const CARDS = [
   { label: "WHATSAPP", value: "+234 904 852 8199", href: `https://wa.me/${WHATSAPP_NUMBER}`, external: true, small: false },
   { label: "INSTAGRAM", value: "@zenom.studio", href: "https://instagram.com/zenom.studio", external: true, small: false },
-  { label: "EMAIL", value: "zenomart.studio@gmail.com", href: "mailto:zenomart.studio@gmail.com", external: false, small: true },
+  { label: "EMAIL", value: CONTACT_EMAIL, href: `mailto:${CONTACT_EMAIL}`, external: false, small: true },
 ];
 
 export default function ContactPage() {

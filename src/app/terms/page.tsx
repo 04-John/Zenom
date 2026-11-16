@@ -91,8 +91,8 @@ export default function TermsPage() {
         <Section title="Contact">
           <p>
             Questions about these terms:{" "}
-            <a href="mailto:zenomart.studio@gmail.com" className="text-ember underline">
-              zenomart.studio@gmail.com
+            <a href="mailto:zenomstudios@gmail.com" className="text-ember underline">
+              zenomstudios@gmail.com
             </a>
             .
           </p>

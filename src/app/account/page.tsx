@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatNaira } from "@/lib/pricing";
@@ -15,6 +16,8 @@ export const dynamic = "force-dynamic";
 export default async function AccountPage() {
   const session = await getServerSession(authOptions);
   if (!session) return <AuthPage initialTab="login" />;
+  // The admin's home is the studio, not the customer account page.
+  if ((session.user as { role?: string }).role === "ADMIN") redirect("/studio");
 
   const orders = await prisma.order.findMany({
     where: { userId: (session.user as { id?: string }).id },

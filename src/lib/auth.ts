@@ -27,9 +27,13 @@ export const authOptions: NextAuthOptions = {
         const { allowed } = rateLimit(`login:${ip}:${credentials.email}`, 10, 15 * 60 * 1000);
         if (!allowed) throw new Error("TooManyAttempts");
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
-        });
+        // A database outage must not look like a wrong password.
+        let user;
+        try {
+          user = await prisma.user.findUnique({ where: { email: credentials.email } });
+        } catch {
+          throw new Error("ServiceUnavailable");
+        }
         if (!user?.passwordHash) return null;
 
         const valid = await bcrypt.compare(credentials.password, user.passwordHash);

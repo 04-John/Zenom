@@ -8,7 +8,10 @@ import { useToast } from "@/components/ui/Toast";
 
 // The pillar (Portraits / Abstract) is derived from the category on the
 // server; the category also decides which price table applies.
-export function ProductForm({ initial }: { initial?: any }) {
+const slugify = (s: string) =>
+  s.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+export function ProductForm({ initial, suggestedCodes }: { initial?: any; suggestedCodes?: Record<string, string> }) {
   const router = useRouter();
   const { toast } = useToast();
   const [form, setForm] = useState({
@@ -16,8 +19,8 @@ export function ProductForm({ initial }: { initial?: any }) {
     slug: initial?.slug ?? "",
     description: initial?.description ?? "",
     category: initial?.category ?? "PORTRAIT",
-    status: initial?.status ?? "DRAFT",
-    archiveCode: initial?.archiveCode ?? "",
+    status: initial?.status ?? "AVAILABLE",
+    archiveCode: initial?.archiveCode ?? suggestedCodes?.PORTRAIT ?? "",
     imageUrl: initial?.images?.[0]?.url ?? "",
   });
   const [saving, setSaving] = useState(false);
@@ -94,8 +97,15 @@ export function ProductForm({ initial }: { initial?: any }) {
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-4">
-      <Field label="Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
-      <Field label="Slug" value={form.slug} onChange={(v) => setForm({ ...form, slug: v })} />
+      <Field
+        label="Name"
+        value={form.name}
+        // New artworks: the slug follows the name until it is edited by hand.
+        onChange={(v) =>
+          setForm((f) => ({ ...f, name: v, slug: !initial && f.slug === slugify(f.name) ? slugify(v) : f.slug }))
+        }
+      />
+      <Field label="Slug (the page address)" value={form.slug} onChange={(v) => setForm({ ...form, slug: v })} />
       <Field label="Archive Code (e.g. ZS-001)" value={form.archiveCode} onChange={(v) => setForm({ ...form, archiveCode: v })} />
       <Field label="Description" value={form.description} onChange={(v) => setForm({ ...form, description: v })} textarea />
       <p className="text-xs text-ink-3">
@@ -126,7 +136,12 @@ export function ProductForm({ initial }: { initial?: any }) {
         <span className="label-mono">Category</span>
         <select
           value={form.category}
-          onChange={(e) => setForm({ ...form, category: e.target.value })}
+          onChange={(e) => {
+            const category = e.target.value;
+            // Keep an auto-suggested code in step with the category; never overwrite a typed one.
+            const wasSuggested = !initial && Object.values(suggestedCodes ?? {}).includes(form.archiveCode);
+            setForm({ ...form, category, archiveCode: wasSuggested ? suggestedCodes![category] : form.archiveCode });
+          }}
           className="field mt-2"
         >
           <option value="PORTRAIT">Portrait (Portrait price table)</option>
@@ -152,7 +167,7 @@ export function ProductForm({ initial }: { initial?: any }) {
 
       {error && <p className="text-sm text-ember">{error}</p>}
       <Button type="submit" loading={saving} disabled={uploading}>
-        Save Product
+        {initial ? "Save changes" : "Add artwork"}
       </Button>
     </form>
   );

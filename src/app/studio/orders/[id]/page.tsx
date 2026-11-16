@@ -17,7 +17,7 @@ export default async function StudioOrderDetailPage({ params }: { params: { id: 
   if (!order) notFound();
 
   return (
-    <div className="mx-auto max-w-2xl px-6 pb-24 pt-[140px]">
+    <div className="max-w-2xl pb-24 pt-8">
       <div className="flex flex-wrap items-center gap-4">
         <h1 className="h-section break-all">{order.orderNumber}</h1>
         <StatusBadge status={order.status} />
