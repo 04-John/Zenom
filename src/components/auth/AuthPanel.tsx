@@ -14,8 +14,8 @@ import { cn } from "@/lib/cn";
 type Tab = "login" | "signup";
 
 const ERROR_MESSAGES: Record<string, string> = {
-  EmailNotVerified: "Please verify your email before signing in. Check your inbox for the link.",
-  InvalidVerificationLink: "That verification link is invalid or has expired.",
+  EmailNotVerified: "Please verify your email before signing in.",
+  InvalidVerificationLink: "That verification link is invalid or has expired. Sign in and we'll send you a code instead.",
   TooManyAttempts: "Too many attempts. Please wait a while before trying again.",
   ServiceUnavailable: "We couldn't reach the database just now. Your details are fine, so wait a few seconds and try again.",
 };
@@ -34,13 +34,21 @@ function AuthPanelInner({ initialTab }: { initialTab: Tab }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<Tab>(initialTab);
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  // /signup?verify=<email> opens straight on the code step (used by the phone
+  // sign-in page when it finds an unverified account).
+  const verifyEmail = searchParams.get("verify") ?? "";
+  const [form, setForm] = useState({ name: "", email: verifyEmail, password: "" });
   const errorParam = searchParams.get("error");
   const [error, setError] = useState<string | null>(
     errorParam ? ERROR_MESSAGES[errorParam] ?? "Something went wrong." : null
   );
   const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  // "code" = the account exists but the emailed 6-digit code hasn't been entered yet.
+  const [step, setStep] = useState<"form" | "code">(verifyEmail ? "code" : "form");
+  const [code, setCode] = useState("");
+  const [info, setInfo] = useState<string | null>(
+    verifyEmail ? "Your account isn't verified yet. We've emailed you a new 6-digit code." : null
+  );
   const justVerified = searchParams.get("verified") === "1";
   const justReset = searchParams.get("reset") === "1";
 
@@ -49,20 +57,20 @@ function AuthPanelInner({ initialTab }: { initialTab: Tab }) {
     setError(null);
   }
 
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
+  async function requestCode() {
+    await fetch("/api/auth/resend-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: form.email }),
+    }).catch(() => {});
+  }
 
+  // Signs in and routes admins to the studio, everyone else to their account.
+  // Returns an error message, or null once the redirect has started.
+  async function signInAndGo(): Promise<string | null> {
     const res = await signIn("credentials", { email: form.email, password: form.password, redirect: false });
+    if (res?.error) return res.error;
 
-    if (res?.error) {
-      setError(ERROR_MESSAGES[res.error] ?? "Incorrect email or password.");
-      setLoading(false);
-      return;
-    }
-
-    // Admins land in the studio dashboard, everyone else in their account.
     let dest = "/account";
     try {
       const session = await fetch("/api/auth/session").then((r) => r.json());
@@ -72,6 +80,61 @@ function AuthPanelInner({ initialTab }: { initialTab: Tab }) {
     }
     router.push(dest);
     router.refresh();
+    return null;
+  }
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    const err = await signInAndGo();
+    if (err === "EmailNotVerified") {
+      // Right password, but the account was never verified: send a fresh code.
+      await requestCode();
+      setCode("");
+      setInfo("Your account isn't verified yet. We've emailed you a new 6-digit code.");
+      setStep("code");
+      setLoading(false);
+      return;
+    }
+    if (err) {
+      setError(ERROR_MESSAGES[err] ?? "Incorrect email or password.");
+      setLoading(false);
+    }
+  }
+
+  async function handleVerify(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    const res = await fetch("/api/auth/verify-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: form.email, code: code.trim() }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error ?? "Something went wrong.");
+      setLoading(false);
+      return;
+    }
+
+    // Verified. The password is still in the form, so sign straight in.
+    const err = form.password ? await signInAndGo() : "NoPassword";
+    if (err) {
+      setStep("form");
+      setTab("login");
+      setInfo("Email verified. You can sign in now.");
+      setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    setError(null);
+    await requestCode();
+    setInfo("A new code is on its way. It can take a minute to arrive.");
   }
 
   async function handleSignup(e: React.FormEvent) {
@@ -93,7 +156,9 @@ function AuthPanelInner({ initialTab }: { initialTab: Tab }) {
     }
 
     setLoading(false);
-    setSubmitted(true);
+    setCode("");
+    setInfo(null);
+    setStep("code");
   }
 
   const isSignup = tab === "signup";
@@ -117,15 +182,42 @@ function AuthPanelInner({ initialTab }: { initialTab: Tab }) {
       </Reveal>
 
       <div className="max-w-[440px]">
-        {submitted ? (
-          <div role="status">
+        {step === "code" ? (
+          <div>
             <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-ember">
               <Check size={28} strokeWidth={2.4} className="text-night" />
             </div>
             <h2 className="font-display text-[48px] italic leading-[0.95]">Check your email.</h2>
             <p className="mt-4 text-[15px] leading-[1.7] text-ink-2">
-              We&rsquo;ve sent a verification link to {form.email}. Click it to activate your account, then sign in.
+              We&rsquo;ve sent a 6-digit code to {form.email}. Enter it below to activate your account. If you
+              don&rsquo;t see it, check your spam folder.
             </p>
+            <form onSubmit={handleVerify} className="mt-6 flex flex-col gap-3">
+              <input
+                className="field text-center font-mono text-2xl tracking-[0.5em]"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="000000"
+                maxLength={6}
+                required
+                autoFocus
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/D/g, ""))}
+                aria-label="6-digit verification code"
+              />
+              {info && !error && <p className="text-sm text-ember">{info}</p>}
+              {error && (
+                <p role="alert" className="text-sm text-red-400">
+                  {error}
+                </p>
+              )}
+              <Button type="submit" loading={loading} disabled={code.length !== 6} className="mt-2 w-full py-[15px] text-[15px]">
+                Verify and continue
+              </Button>
+              <button type="button" onClick={handleResend} className="text-sm text-ink-2 underline hover:text-ink">
+                Send me a new code
+              </button>
+            </form>
           </div>
         ) : (
           <>
@@ -194,8 +286,8 @@ function AuthPanelInner({ initialTab }: { initialTab: Tab }) {
               {justReset && !error && !isSignup && (
                 <p role="status" className="text-sm text-ember">Password updated. Sign in with your new password.</p>
               )}
-              {justVerified && !error && !isSignup && (
-                <p className="text-sm text-ember">Email verified. You can sign in now.</p>
+              {(justVerified || info) && !error && !isSignup && (
+                <p className="text-sm text-ember">{info ?? "Email verified. You can sign in now."}</p>
               )}
               {error && (
                 <p role="alert" className="text-sm text-red-400">

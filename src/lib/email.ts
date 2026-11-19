@@ -89,15 +89,13 @@ const SITE_URL = (process.env.NEXTAUTH_URL || "https://zenomstudio.netlify.app")
 const emailHeader = () =>
   `<p style="margin:0 0 20px"><img src="${SITE_URL}/brand/zenom-mark-dark.png" alt="Zenom Studio" width="56" height="56" style="display:block;border:0" /></p>`;
 
-// Signup verification link must be clicked before the account can log in
-// — see src/lib/auth.ts authorize() and /api/auth/verify-email.
-export async function sendVerificationEmail(params: { email: string; name: string; token: string }) {
-  const verifyUrl = `${process.env.NEXTAUTH_URL}/api/auth/verify-email?token=${params.token}&email=${encodeURIComponent(params.email)}`;
-
+// Signup verification: a 6-digit code typed on the site (no link, which keeps
+// the mail out of spam). See /api/auth/verify-code and src/lib/auth.ts.
+export async function sendVerificationEmail(params: { email: string; name: string; code: string }) {
   return deliver({
     to: params.email,
-    subject: "Verify your Zenom Studio account",
-    html: `${emailHeader()}<p>Hi ${escapeHtml(params.name)},</p><p>Thanks for creating a Zenom Studio account. Please confirm your email address to finish setting it up.</p><p><a href="${verifyUrl}">Confirm my email</a></p><p>This link expires in 24 hours. If you didn't create an account, you can ignore this email.</p>`,
+    subject: `Your Zenom Studio code: ${params.code}`,
+    html: `${emailHeader()}<p>Hi ${escapeHtml(params.name)},</p><p>Thanks for creating a Zenom Studio account. Your verification code is:</p><p style="font-size:30px;letter-spacing:6px;font-weight:bold;margin:18px 0">${params.code}</p><p>Enter it on the sign-up page to finish setting up your account. The code works for 15 minutes. If you didn't create an account, you can ignore this email.</p>`,
   });
 }
 

@@ -11,8 +11,8 @@ import { art } from "@/lib/catalog";
 
 // Same messages as the desktop AuthPanel (next-auth error codes from lib/auth.ts).
 const ERROR_MESSAGES: Record<string, string> = {
-  EmailNotVerified: "Please verify your email before signing in. Check your inbox for the link.",
-  InvalidVerificationLink: "That verification link is invalid or has expired.",
+  EmailNotVerified: "Please verify your email before signing in.",
+  InvalidVerificationLink: "That verification link is invalid or has expired. Sign in and we'll send you a code instead.",
   TooManyAttempts: "Too many attempts. Please wait a while before trying again.",
   ServiceUnavailable: "We couldn't reach the database just now. Your details are fine, so wait a few seconds and try again.",
 };
@@ -76,6 +76,17 @@ function SignInView({ studio, errorParam, verified, reset }: { studio: boolean; 
     setError(null);
 
     const res = await signIn("credentials", { email: email.trim(), password, redirect: false });
+    if (res?.error === "EmailNotVerified") {
+      // Right password but never verified: send a fresh 6-digit code and
+      // continue on the code screen (shared with sign-up).
+      await fetch("/api/auth/resend-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      }).catch(() => {});
+      router.push(`/signup?verify=${encodeURIComponent(email.trim())}`);
+      return;
+    }
     if (res?.error) {
       setError(ERROR_MESSAGES[res.error] ?? "Incorrect email or password.");
       setLoading(false);

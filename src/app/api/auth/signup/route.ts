@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import crypto from "crypto";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { sendVerificationEmail } from "@/lib/email";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
+import { issueVerificationCode } from "@/lib/verification-code";
 
 const signupSchema = z.object({
   name: z.string().min(2).max(120),
@@ -33,19 +33,11 @@ export async function POST(req: NextRequest) {
     data: { name: parsed.data.name, email: parsed.data.email, passwordHash, role: "CUSTOMER" },
   });
 
-  // Account exists but emailVerified stays null until the link below is
-  // clicked — see src/lib/auth.ts authorize(), which refuses to log in
-  // unverified accounts.
-  const token = crypto.randomBytes(32).toString("hex");
-  await prisma.verificationToken.create({
-    data: {
-      identifier: parsed.data.email,
-      token,
-      expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
-    },
-  });
-
-  await sendVerificationEmail({ email: parsed.data.email, name: parsed.data.name, token });
+  // Account exists but emailVerified stays null until the 6-digit code is
+  // entered (see /api/auth/verify-code). src/lib/auth.ts authorize() refuses
+  // to log in unverified accounts.
+  const code = await issueVerificationCode(parsed.data.email);
+  await sendVerificationEmail({ email: parsed.data.email, name: parsed.data.name, code });
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }
