@@ -2,6 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { MobileProductForm } from "@/components/mobile/studio/MobileProductForm";
 import { ProductForm } from "../ProductForm";
 
+// Reads the database on every request, so it must never be prerendered at build time.
+export const dynamic = "force-dynamic";
+
 const PREFIX: Record<string, string> = { PORTRAIT: "W", GEOMETRIC: "G", MINIMALISTIC: "M", FIGURATIVE: "F" };
 const CATEGORIES = ["PORTRAIT", "GEOMETRIC", "MINIMALISTIC", "FIGURATIVE"] as const;
 
