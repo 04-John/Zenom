@@ -12,7 +12,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  const parsed = productUpdateSchema.safeParse(await req.json());
+  const parsed = productUpdateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Please check the form and try again." }, { status: 400 });
   }

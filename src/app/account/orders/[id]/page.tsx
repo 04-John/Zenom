@@ -30,7 +30,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
   return (
     <>
       <OrderDetailScreen order={order} initialTab={tab} />
-      <div className="mx-auto max-w-2xl px-6 py-16 max-[900px]:hidden">
+      <div className="mx-auto max-w-2xl px-6 pb-24 pt-32 max-[900px]:hidden">
         <OrderDesktopView order={order} />
       </div>
     </>
