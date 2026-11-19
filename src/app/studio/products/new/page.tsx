@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { ProductForm } from "../ProductForm";
 
+// Reads the database on every request, so it must never be prerendered at build time.
+export const dynamic = "force-dynamic";
+
 const PREFIX: Record<string, string> = { PORTRAIT: "W", GEOMETRIC: "G", MINIMALISTIC: "M", FIGURATIVE: "F" };
 
 export default async function NewProductPage() {
