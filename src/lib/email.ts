@@ -27,7 +27,23 @@ const RESEND_FROM = process.env.EMAIL_FROM || "Zenom Studio <orders@zenomstudio.
 
 type Mail = { to: string; subject: string; html: string; replyTo?: string };
 
-async function deliver(mail: Mail): Promise<{ sent: boolean; error?: unknown }> {
+// Spam filters distrust HTML-only mail. Every message also carries a plain-text
+// version (made from the HTML, with link URLs kept) and a full HTML document.
+const toText = (html: string) =>
+  html
+    .replace(/<img[^>]*>/gi, "")
+    .replace(/<a [^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gi, (_m, href, label) => (label === href ? href : `${label}: ${href}`))
+    .replace(/<\/(p|li|ul|div)>|<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+const wrapHtml = (body: string) =>
+  `<!doctype html><html><body style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#222">${body}<p style="margin-top:28px;color:#777;font-size:12px">Zenom Studio, Kaduna, Nigeria. Questions? Just reply to this email.</p></body></html>`;
+
+async function deliver(raw: Mail): Promise<{ sent: boolean; error?: unknown }> {
+  const mail = { ...raw, text: toText(raw.html), html: wrapHtml(raw.html) };
   try {
     if (smtp) {
       await smtp.sendMail({
@@ -35,6 +51,7 @@ async function deliver(mail: Mail): Promise<{ sent: boolean; error?: unknown }> 
         to: mail.to,
         subject: mail.subject,
         html: mail.html,
+        text: mail.text,
         replyTo: mail.replyTo,
       });
       return { sent: true };
@@ -46,6 +63,7 @@ async function deliver(mail: Mail): Promise<{ sent: boolean; error?: unknown }> 
         to: mail.to,
         subject: mail.subject,
         html: mail.html,
+        text: mail.text,
         reply_to: mail.replyTo,
       });
       if (error) {
@@ -78,7 +96,7 @@ export async function sendVerificationEmail(params: { email: string; name: strin
   return deliver({
     to: params.email,
     subject: "Verify your Zenom Studio account",
-    html: `${emailHeader()}<p>Hi ${escapeHtml(params.name)},</p><p>Please confirm your email to activate your account:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>This link expires in 24 hours.</p>`,
+    html: `${emailHeader()}<p>Hi ${escapeHtml(params.name)},</p><p>Thanks for creating a Zenom Studio account. Please confirm your email address to finish setting it up.</p><p><a href="${verifyUrl}">Confirm my email</a></p><p>This link expires in 24 hours. If you didn't create an account, you can ignore this email.</p>`,
   });
 }
 
