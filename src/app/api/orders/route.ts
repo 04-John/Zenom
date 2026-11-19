@@ -3,11 +3,12 @@ import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { checkoutSchema } from "@/lib/validation";
+import { checkoutSchema, commissionSchema, type CommissionInput } from "@/lib/validation";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { sendOrderEmails } from "@/lib/email";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
-import { fromDbCategory, isPortrait, orderTotals, sizeLabel, unitPriceFor } from "@/lib/pricing";
+import { fromDbCategory, isPortrait, orderTotals, sizeLabel, toDbCategory, unitPriceFor, type PricedItem } from "@/lib/pricing";
+import { buildItemNotes, buildOrderNotes, commissionProductName, commissionSlug } from "@/lib/commission";
 
 // Order creation, in the required sequence:
 // 1. validate  2. save to Postgres  3. attempt email (failure non-fatal)
@@ -22,6 +23,16 @@ export async function POST(req: NextRequest) {
 
     const session = await getServerSession(authOptions);
     const body = await req.json();
+
+    // The light app's commission request (/commission) shares this endpoint.
+    if (body?.kind === "commission") {
+      const commission = commissionSchema.safeParse(body);
+      if (!commission.success) {
+        return NextResponse.json({ error: "Please check the form and try again." }, { status: 400 });
+      }
+      return createCommission(commission.data, (session?.user as { id?: string } | undefined)?.id);
+    }
+
     const parsed = checkoutSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -36,7 +47,13 @@ export async function POST(req: NextRequest) {
       include: { images: { orderBy: { order: "asc" }, take: 1 } },
     });
 
-    const priced = [];
+    const priced: {
+      product: (typeof products)[number];
+      item: (typeof data.items)[number];
+      category: ReturnType<typeof fromDbCategory>;
+      pricedItem: PricedItem;
+      unitPrice: number;
+    }[] = [];
     for (const item of data.items) {
       const product = products.find((p) => p.id === item.productId);
       if (!product || product.status !== "AVAILABLE") {
@@ -52,49 +69,38 @@ export async function POST(req: NextRequest) {
 
     const totals = orderTotals(priced.map((p) => p.pricedItem), data.delivery);
 
-    // ZS-#### numbering: next free number, retrying if two orders race.
-    const existing = await prisma.order.count();
-    let order = null;
-    let orderNumber = "";
-    for (let attempt = 0; attempt < 10 && !order; attempt++) {
-      orderNumber = `ZS-${String(existing + 1 + attempt).padStart(4, "0")}`;
-      try {
-        order = await prisma.order.create({
-          data: {
-            orderNumber,
-            userId: (session?.user as any)?.id,
-            status: "AWAITING_DEPOSIT",
-            customerName: data.customerName,
-            customerEmail: data.customerEmail,
-            customerPhone: data.customerPhone,
-            deliveryAddress: data.deliveryAddress,
-            notes: data.notes,
-            delivery: data.delivery === "kaduna" ? "KADUNA" : "OUTSIDE",
-            deliveryFee: totals.delivery,
-            subtotal: totals.subtotal,
-            total: totals.total,
-            deposit: totals.deposit,
-            items: {
-              create: priced.map(({ product, item, unitPrice }) => ({
-                productId: product.id,
-                sizeLabel: sizeLabel(item.sizeIndex),
-                sizeIndex: item.sizeIndex,
-                framed: item.framed,
-                subjectCount: item.subjectCount,
-                notes: item.notes,
-                unitPrice,
-                quantity: 1,
-                subtotal: unitPrice,
-              })),
-            },
+    const order = await createWithOrderNumber((orderNumber) =>
+      prisma.order.create({
+        data: {
+          orderNumber,
+          userId: (session?.user as any)?.id,
+          status: "AWAITING_DEPOSIT",
+          customerName: data.customerName,
+          customerEmail: data.customerEmail,
+          customerPhone: data.customerPhone,
+          deliveryAddress: data.deliveryAddress,
+          notes: data.notes,
+          delivery: data.delivery === "kaduna" ? "KADUNA" : "OUTSIDE",
+          deliveryFee: totals.delivery,
+          subtotal: totals.subtotal,
+          total: totals.total,
+          deposit: totals.deposit,
+          items: {
+            create: priced.map(({ product, item, unitPrice }) => ({
+              productId: product.id,
+              sizeLabel: sizeLabel(item.sizeIndex),
+              sizeIndex: item.sizeIndex,
+              framed: item.framed,
+              subjectCount: item.subjectCount,
+              notes: item.notes,
+              unitPrice,
+              quantity: 1,
+              subtotal: unitPrice,
+            })),
           },
-        });
-      } catch (err) {
-        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") continue;
-        throw err;
-      }
-    }
-    if (!order) throw new Error("Could not allocate an order number");
+        },
+      })
+    );
 
     const emailResult = await sendOrderEmails({
       orderNumber: order.orderNumber,
@@ -137,13 +143,143 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json(
-      { orderNumber: order.orderNumber, whatsappUrl, total: totals.total, deposit: totals.deposit },
+      { id: order.id, orderNumber: order.orderNumber, whatsappUrl, total: totals.total, deposit: totals.deposit },
       { status: 201 }
     );
   } catch (err) {
     console.error("Order creation failed:", err);
     return NextResponse.json(
       { error: "Something went wrong while saving your order. Please try again." },
+      { status: 500 }
+    );
+  }
+}
+
+// ZS-#### numbering: next free number, retrying if two orders race.
+async function createWithOrderNumber<T>(create: (orderNumber: string) => Promise<T>): Promise<T> {
+  const existing = await prisma.order.count();
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const orderNumber = `ZS-${String(existing + 1 + attempt).padStart(4, "0")}`;
+    try {
+      return await create(orderNumber);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") continue;
+      throw err;
+    }
+  }
+  throw new Error("Could not allocate an order number");
+}
+
+// Commission request: saved as PENDING (Samuel reviews it and sends the
+// quote), priced server-side like any order, and attached to the hidden
+// per-category commission product (see src/lib/commission.ts).
+async function createCommission(data: CommissionInput, userId: string | undefined) {
+  try {
+    const category = data.category;
+    const product = await prisma.product.upsert({
+      where: { slug: commissionSlug(category) },
+      update: {},
+      create: {
+        slug: commissionSlug(category),
+        name: commissionProductName(category),
+        description: "Placeholder for commission requests made in the app. Not shown on the site.",
+        category: toDbCategory(category),
+        pillar: isPortrait(category) ? "PORTRAITS" : "ABSTRACT",
+        status: "DRAFT",
+      },
+    });
+
+    const subjectCount = isPortrait(category) ? data.subjectCount : 1;
+    const pricedItem = { category, sizeIndex: data.sizeIndex, framed: data.framed, subjectCount };
+    const unitPrice = unitPriceFor(pricedItem);
+    const totals = orderTotals([pricedItem], data.delivery);
+    const email = data.customerEmail?.trim() ?? "";
+    const address = data.deliveryAddress?.trim() || "To confirm on WhatsApp";
+    const notes = buildOrderNotes({ neededBy: data.neededBy, notes: data.notes });
+
+    const order = await createWithOrderNumber((orderNumber) =>
+      prisma.order.create({
+        data: {
+          orderNumber,
+          userId,
+          status: "PENDING",
+          customerName: data.customerName,
+          customerEmail: email,
+          customerPhone: data.customerPhone,
+          deliveryAddress: address,
+          notes,
+          delivery: data.delivery === "kaduna" ? "KADUNA" : "OUTSIDE",
+          deliveryFee: totals.delivery,
+          subtotal: totals.subtotal,
+          total: totals.total,
+          deposit: totals.deposit,
+          items: {
+            create: [
+              {
+                productId: product.id,
+                sizeLabel: sizeLabel(data.sizeIndex),
+                sizeIndex: data.sizeIndex,
+                framed: data.framed,
+                subjectCount,
+                notes: buildItemNotes({ medium: data.medium, photoUrl: data.photoUrl }),
+                unitPrice,
+                quantity: 1,
+                subtotal: unitPrice,
+              },
+            ],
+          },
+        },
+      })
+    );
+
+    const emailResult = await sendOrderEmails({
+      orderNumber: order.orderNumber,
+      customerEmail: email,
+      customerName: order.customerName,
+      delivery: data.delivery,
+      subtotal: totals.subtotal,
+      deliveryFee: totals.delivery,
+      total: totals.total,
+      deposit: totals.deposit,
+      items: [
+        {
+          title: `${commissionProductName(category)} · ${data.medium}`,
+          category,
+          sizeIndex: data.sizeIndex,
+          framed: data.framed,
+          subjectCount,
+        },
+      ],
+    });
+    await prisma.order.update({ where: { id: order.id }, data: { emailSent: emailResult.sent } });
+
+    const whatsappUrl = buildWhatsAppLink({
+      orderNumber: order.orderNumber,
+      customerName: order.customerName,
+      deliveryAddress: address,
+      delivery: data.delivery,
+      total: totals.total,
+      notes,
+      items: [
+        {
+          title: `${commissionProductName(category)} (${data.medium})`,
+          code: "commission",
+          size: sizeLabel(data.sizeIndex),
+          framed: data.framed,
+          subjectCount,
+          unitPrice,
+        },
+      ],
+    });
+
+    return NextResponse.json(
+      { id: order.id, orderNumber: order.orderNumber, whatsappUrl, total: totals.total, deposit: totals.deposit },
+      { status: 201 }
+    );
+  } catch (err) {
+    console.error("Commission request failed:", err);
+    return NextResponse.json(
+      { error: "Something went wrong while saving your request. Please try again." },
       { status: 500 }
     );
   }

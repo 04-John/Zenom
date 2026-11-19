@@ -85,7 +85,7 @@ function ParImg({
       className={`absolute overflow-hidden rounded-[12px] will-change-transform ${className}`}
       style={reduced ? { transform: `rotate(${rot}deg)` } : { transform }}
     >
-      <Image src={src} alt="" fill loading="eager" sizes="(max-width:900px) 40vw, 360px" className="object-cover" />
+      <Image src={src} alt="" fill loading="eager" sizes="(max-width: 899.98px) 1px, (max-width: 900px) 40vw, 360px" className="object-cover" />
     </motion.div>
   );
 }

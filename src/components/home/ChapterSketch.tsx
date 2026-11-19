@@ -88,10 +88,10 @@ export function ChapterSketch() {
             className="absolute inset-0"
             style={{ clipPath: sketchClip, filter: "grayscale(1) contrast(0.32) brightness(1.6)" }}
           >
-            <Image src={art("w05")} alt="" fill loading="eager" sizes="(max-width:900px) 70vw, 560px" className="object-cover" />
+            <Image src={art("w05")} alt="" fill loading="eager" sizes="(max-width: 899.98px) 1px, (max-width: 900px) 70vw, 560px" className="object-cover" />
           </motion.div>
           <motion.div className="absolute inset-0" style={{ clipPath: shadeClip }}>
-            <Image src={art("w05")} alt={title} fill loading="eager" sizes="(max-width:900px) 70vw, 560px" className="object-cover" />
+            <Image src={art("w05")} alt={title} fill loading="eager" sizes="(max-width: 899.98px) 1px, (max-width: 900px) 70vw, 560px" className="object-cover" />
           </motion.div>
           <motion.div
             className="absolute h-[10px] w-[10px] rounded-full bg-ember"

@@ -7,83 +7,28 @@ import { useCart } from "@/context/CartContext";
 import { ZenomLockup } from "@/components/brand/ZenomLockup";
 import { PageIntro } from "@/components/motion/PageIntro";
 import { Reveal } from "@/components/motion/Reveal";
-import { Button, buttonClass } from "@/components/ui/Button";
-import { useToast } from "@/components/ui/Toast";
+import { buttonClass } from "@/components/ui/Button";
 import { DeliveryToggle, deliveryLabel, itemSpec } from "@/components/cart/OrderBag";
+import { MobileBag } from "@/components/cart/MobileBag";
+import { useSendOrder } from "@/components/cart/useSendOrder";
 import { art } from "@/lib/catalog";
 import { formatNaira } from "@/lib/pricing";
 
 const FALLBACK_FAN = ["w05", "w07", "w01"].map(art);
 
-type Sent = { orderNumber: string; whatsappUrl: string | null };
-
 // Checkout takes no payment. The order is saved first (the server recomputes
-// every price); WhatsApp is only the hand-off afterwards. Submit is guarded
-// while in flight so repeated clicks cannot create duplicate orders.
+// every price); WhatsApp is only the hand-off afterwards (see useSendOrder,
+// shared with the mobile bag). Below 900px the bag and checkout are one
+// screen (MobileBag); from 900px this page is unchanged.
 export default function CheckoutPage() {
-  const { items, totals, delivery, setDelivery, clear, hydrated } = useCart();
-  const { toast } = useToast();
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState<Sent | null>(null);
+  const { items, totals, delivery, setDelivery, hydrated } = useCart();
+  const { submitting, error, sent, send } = useSendOrder();
   const [form, setForm] = useState({ customerName: "", customerPhone: "", customerEmail: "", deliveryAddress: "", notes: "" });
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (submitting) return;
-    setSubmitting(true);
-    setError(null);
-
-    // Popup blockers only allow window.open during the click itself, so grab
-    // a blank tab now and point it at WhatsApp once the order is saved.
-    const tab = window.open("", "_blank");
-
-    try {
-      const res = await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerName: form.customerName.trim(),
-          customerEmail: form.customerEmail.trim(),
-          customerPhone: form.customerPhone.trim(),
-          deliveryAddress: form.deliveryAddress.trim(),
-          delivery,
-          notes: form.notes.trim() || undefined,
-          items: items.map((i) => ({
-            productId: i.productId,
-            sizeIndex: i.sizeIndex,
-            framed: i.framed,
-            subjectCount: i.subjectCount,
-            notes: i.notes || undefined,
-          })),
-        }),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? "Something went wrong while submitting your order.");
-      }
-
-      const { whatsappUrl, orderNumber } = (await res.json()) as { whatsappUrl?: string; orderNumber: string };
-      let opened = false;
-      if (whatsappUrl && tab && !tab.closed) {
-        tab.location.href = whatsappUrl;
-        opened = true;
-      } else if (tab) {
-        tab.close();
-      }
-      setSent({ orderNumber, whatsappUrl: opened ? null : whatsappUrl ?? null });
-      clear();
-      window.scrollTo({ top: 0 });
-    } catch (err) {
-      tab?.close();
-      const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
-      setError(message);
-      toast(message, "error");
-    } finally {
-      setSubmitting(false);
-    }
+    void send(form);
   }
 
   const n = items.length;
@@ -91,6 +36,10 @@ export default function CheckoutPage() {
 
   return (
     <>
+      <div className="min-[900px]:hidden">
+        <MobileBag />
+      </div>
+      <div className="max-[900px]:hidden">
       <PageIntro
         kicker={sent ? `ORDER ${sent.orderNumber}` : "CHECKOUT"}
         title={sent ? "Sent." : "Almost yours."}
@@ -200,6 +149,7 @@ export default function CheckoutPage() {
             </Reveal>
           </form>
         )}
+      </div>
       </div>
     </>
   );

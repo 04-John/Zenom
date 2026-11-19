@@ -1,18 +1,37 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { v2 as cloudinary } from "cloudinary";
 import { authOptions } from "@/lib/auth";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 // Signed direct-to-Cloudinary upload: the browser uploads the file
 // straight to Cloudinary using this signature, so the image never has
 // to pass through a Netlify function (which has a request body size
 // limit) and the API secret never reaches the client.
+//
+// Two purposes:
+//  - default (no body): admin artwork images, admin only.
+//  - { purpose: "commission" }: a customer's reference photo for a
+//    commission request (/commission). Open to guests, so it is rate
+//    limited per IP, signed for its own folder and restricted to images.
 const UPLOAD_FOLDER = "zenom-studio/products";
+const COMMISSION_FOLDER = "zenom-studio/commissions";
+const COMMISSION_FORMATS = "jpg,jpeg,png,webp,heic";
 
-export async function POST() {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user as any).role !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => null);
+  const commission = body?.purpose === "commission";
+
+  if (commission) {
+    const { allowed } = rateLimit(`upload:${clientIp(req)}`, 8, 10 * 60 * 1000);
+    if (!allowed) {
+      return NextResponse.json({ error: "Too many uploads. Please try again shortly." }, { status: 429 });
+    }
+  } else {
+    const session = await getServerSession(authOptions);
+    if (!session || (session.user as any).role !== "ADMIN") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
   }
 
   if (!process.env.CLOUDINARY_API_SECRET || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_CLOUD_NAME) {
@@ -20,16 +39,18 @@ export async function POST() {
   }
 
   const timestamp = Math.floor(Date.now() / 1000);
-  const signature = cloudinary.utils.api_sign_request(
-    { timestamp, folder: UPLOAD_FOLDER },
-    process.env.CLOUDINARY_API_SECRET
-  );
+  const params: Record<string, string | number> = commission
+    ? { timestamp, folder: COMMISSION_FOLDER, allowed_formats: COMMISSION_FORMATS }
+    : { timestamp, folder: UPLOAD_FOLDER };
+  const signature = cloudinary.utils.api_sign_request(params, process.env.CLOUDINARY_API_SECRET);
 
+  // Every signed param must be sent back to Cloudinary with the file.
   return NextResponse.json({
     timestamp,
     signature,
     apiKey: process.env.CLOUDINARY_API_KEY,
     cloudName: process.env.CLOUDINARY_CLOUD_NAME,
-    folder: UPLOAD_FOLDER,
+    folder: params.folder,
+    ...(commission && { allowedFormats: COMMISSION_FORMATS }),
   });
 }

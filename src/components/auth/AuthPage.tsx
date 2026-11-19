@@ -1,10 +1,13 @@
 import { PageIntro } from "@/components/motion/PageIntro";
 import { AuthPanel } from "@/components/auth/AuthPanel";
+import { MobileSignIn } from "@/components/mobile/MobileSignIn";
 import { art } from "@/lib/catalog";
 
 // Shared by /account (signed out), /login and /signup.
+// Sign-in below 900px is the light app's screen (MobileSignIn); from 900px up,
+// and for /signup at every width, the dark page below is unchanged.
 export function AuthPage({ initialTab }: { initialTab: "login" | "signup" }) {
-  return (
+  const desktop = (
     <>
       <PageIntro
         kicker="MY ACCOUNT"
@@ -17,6 +20,15 @@ export function AuthPage({ initialTab }: { initialTab: "login" | "signup" }) {
       <div className="bg-night">
         <AuthPanel initialTab={initialTab} />
       </div>
+    </>
+  );
+
+  if (initialTab !== "login") return desktop;
+
+  return (
+    <>
+      <MobileSignIn />
+      <div className="max-[900px]:hidden">{desktop}</div>
     </>
   );
 }

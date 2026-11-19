@@ -1,16 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useCart } from "@/context/CartContext";
 import { BAG_BUTTON_ID } from "@/components/cart/AddToBagFly";
 import { ZenomNavLogo } from "@/components/brand/ZenomLockup";
+import { MobileBar } from "@/components/storefront-mobile/MobileBar";
 import { MobileNav } from "./MobileNav";
 import { NAV_LINKS } from "./nav-links";
 
-// Floating blurred pill, fixed 18px from the top. Under 900px it collapses to
-// logo + Bag + Menu, with the links moving into a full-screen overlay.
+// From 900px: floating blurred pill, fixed 18px from the top.
+// Below 900px: the mobile storefront bar (logo or back, Bag, menu) and the
+// full-screen menu overlay. The menu closes once the route has changed, so a
+// menu link fades straight into the next page.
 export function Header() {
   const pathname = usePathname();
   const { items } = useCart();
@@ -18,11 +21,14 @@ export function Header() {
 
   useEffect(() => setMenuOpen(false), [pathname]);
 
+  const toggleMenu = useCallback(() => setMenuOpen((o) => !o), []);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
   return (
     <>
-      <div className="pointer-events-none fixed inset-x-0 top-[18px] z-[900] flex justify-center px-4">
+      <div className="pointer-events-none fixed inset-x-0 top-[18px] z-[900] flex justify-center px-4 max-[900px]:hidden">
         <nav
           aria-label="Main"
           className="pointer-events-auto flex items-center gap-1.5 rounded-pill border border-ink/10 bg-[rgba(24,21,18,0.72)] py-1.5 pl-2 pr-1.5 shadow-nav backdrop-blur-[18px]"
@@ -66,7 +72,7 @@ export function Header() {
             <button
               type="button"
               aria-expanded={menuOpen}
-              onClick={() => setMenuOpen((o) => !o)}
+              onClick={toggleMenu}
               className="rounded-pill border border-ink/15 px-4 py-[9px] text-[13px] text-ink min-[900px]:hidden"
             >
               {menuOpen ? "Close" : "Menu"}
@@ -75,7 +81,8 @@ export function Header() {
         </nav>
       </div>
 
-      <MobileNav open={menuOpen} onNavigate={() => setMenuOpen(false)} />
+      <MobileBar menuOpen={menuOpen} onMenu={toggleMenu} />
+      <MobileNav open={menuOpen} onClose={closeMenu} />
     </>
   );
 }

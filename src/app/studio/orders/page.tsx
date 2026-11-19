@@ -1,12 +1,16 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatNaira } from "@/lib/pricing";
+import { pieceImage } from "@/lib/studio-stats";
+import { ago } from "@/lib/zenom-mobile";
+import { OrdersMobile, type OrderRow } from "@/components/mobile/studio/OrdersMobile";
 import { StatusBadge, statusLabel } from "../StatusBadge";
 
 export const dynamic = "force-dynamic";
 
 const STATUSES = ["AWAITING_DEPOSIT", "PENDING", "CONFIRMED", "IN_PRODUCTION", "READY", "COMPLETED", "CANCELLED"] as const;
 const PAGE_SIZE = 25;
+const MOBILE_LIMIT = 200; // the light app loads the latest orders and filters them on the phone
 
 export default async function StudioOrdersPage({
   searchParams,
@@ -29,7 +33,7 @@ export default async function StudioOrdersPage({
     }),
   };
 
-  const [orders, count, grouped] = await Promise.all([
+  const [orders, count, grouped, latest] = await Promise.all([
     prisma.order.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -39,10 +43,48 @@ export default async function StudioOrdersPage({
     }),
     prisma.order.count({ where }),
     prisma.order.groupBy({ by: ["status"], _count: { _all: true } }),
+    prisma.order.findMany({
+      orderBy: { createdAt: "desc" },
+      take: MOBILE_LIMIT,
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        customerName: true,
+        customerEmail: true,
+        customerPhone: true,
+        total: true,
+        delivery: true,
+        createdAt: true,
+        notes: true,
+        items: {
+          select: {
+            notes: true,
+            quantity: true,
+            product: { select: { images: { orderBy: { order: "asc" }, take: 1, select: { url: true } } } },
+          },
+        },
+      },
+    }),
   ]);
   const counts = Object.fromEntries(grouped.map((g) => [g.status, g._count._all]));
   const allCount = grouped.reduce((a, g) => a + g._count._all, 0);
   const pages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+
+  const now = Date.now();
+  const mobileRows: OrderRow[] = latest.map((o) => ({
+    id: o.id,
+    orderNumber: o.orderNumber,
+    customer: o.customerName,
+    email: o.customerEmail,
+    phone: o.customerPhone,
+    status: o.status,
+    total: formatNaira(o.total),
+    age: ago(o.createdAt, now),
+    pieces: o.items.reduce((a, it) => a + (it.quantity || 1), 0),
+    kaduna: o.delivery === "KADUNA",
+    image: o.items[0] ? pieceImage(o.items[0], o.notes) : null,
+  }));
 
   const href = (over: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
@@ -53,7 +95,10 @@ export default async function StudioOrdersPage({
   };
 
   return (
-    <div className="pb-24 pt-8">
+    <>
+    {/* Light studio app below 900px. */}
+    <OrdersMobile rows={mobileRows} counts={counts} allCount={allCount} initialStatus={status ?? null} initialQ={q} />
+    <div className="pb-24 pt-8 max-[900px]:hidden">
       <h1 className="h-section">Orders</h1>
 
       <form action="/studio/orders" className="mt-6 flex flex-wrap gap-3">
@@ -137,6 +182,7 @@ export default async function StudioOrdersPage({
         </div>
       )}
     </div>
+    </>
   );
 }
 

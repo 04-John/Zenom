@@ -60,8 +60,9 @@ export function ProductCustomizer({ art, categoryLabel }: { art: CustomizerArt; 
   const discRef = useRef<HTMLDivElement>(null);
 
   // Cards link here with ?wall=1 to open the wall preview straight away.
+  // Below 900px this customizer is hidden and MobileArtwork opens its own sheet.
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("wall") === "1") setWallOpen(true);
+    if (window.innerWidth >= 900 && new URLSearchParams(window.location.search).get("wall") === "1") setWallOpen(true);
   }, []);
   const closeWall = useCallback(() => setWallOpen(false), []);
 

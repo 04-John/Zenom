@@ -24,7 +24,7 @@ export function ProductCard({ art, priority = false }: { art: ArtCard; priority?
               width={art.width}
               height={art.height}
               priority={priority}
-              sizes="(max-width: 600px) 100vw, (max-width: 1100px) 50vw, 25vw"
+              sizes="(max-width: 899.98px) 1px, (max-width: 1100px) 50vw, 25vw"
               className="block h-auto w-full"
             />
           </div>

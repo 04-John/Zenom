@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check } from "lucide-react";
@@ -41,6 +42,7 @@ function AuthPanelInner({ initialTab }: { initialTab: Tab }) {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const justVerified = searchParams.get("verified") === "1";
+  const justReset = searchParams.get("reset") === "1";
 
   function switchTab(next: Tab) {
     setTab(next);
@@ -184,6 +186,14 @@ function AuthPanelInner({ initialTab }: { initialTab: Tab }) {
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
               />
+              {!isSignup && (
+                <Link href="/forgot-password" className="self-end py-1 text-[13px] text-ink-2 underline hover:text-ember">
+                  Forgot password?
+                </Link>
+              )}
+              {justReset && !error && !isSignup && (
+                <p role="status" className="text-sm text-ember">Password updated. Sign in with your new password.</p>
+              )}
               {justVerified && !error && !isSignup && (
                 <p className="text-sm text-ember">Email verified. You can sign in now.</p>
               )}

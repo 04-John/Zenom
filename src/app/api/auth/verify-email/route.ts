@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { linkGuestOrders } from "@/lib/account-tokens";
 
 // Clicked from the signup verification email. Marks the user verified
 // and consumes the token so it can't be replayed.
@@ -22,10 +23,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  await prisma.$transaction([
+  const [user] = await prisma.$transaction([
     prisma.user.update({ where: { email }, data: { emailVerified: new Date() } }),
     prisma.verificationToken.delete({ where: { identifier_token: { identifier: email, token } } }),
   ]);
+  // The email is proven now: orders placed with it while signed out join the account.
+  await linkGuestOrders(user.id, email);
 
   loginUrl.searchParams.set("verified", "1");
   return NextResponse.redirect(loginUrl);

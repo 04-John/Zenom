@@ -5,16 +5,19 @@ import type { Metadata } from "next";
 import { getArtworkBySlug, getArtworks } from "@/lib/artworks";
 import { ART_GROUPS } from "@/lib/catalog";
 import { CATEGORY_LABEL, DEFAULT_SIZE_INDEX, artworkPrice, isPortrait } from "@/lib/pricing";
+import { isCommissionSlug } from "@/lib/commission";
 import { Reveal } from "@/components/motion/Reveal";
 import { ArtworkIntro } from "./ArtworkIntro";
-import { ProductCustomizer } from "./ProductCustomizer";
+import { ProductCustomizer, type CustomizerArt } from "./ProductCustomizer";
+import { MobileArtwork } from "./mobile/MobileArtwork";
 
 type Section = "portraits" | "abstract";
 
 // Slugs are global. A portrait opened under /abstract (or the reverse) is sent
 // to its real route; unknown slugs 404.
 async function load(slug: string, section: Section) {
-  const found = await getArtworkBySlug(slug);
+  // Commission placeholders (see src/lib/commission.ts) never have a public page.
+  const found = isCommissionSlug(slug) ? null : await getArtworkBySlug(slug);
   if (!found) notFound();
   const portrait = isPortrait(found.card.category);
   if (portrait !== (section === "portraits")) redirect(found.card.href);
@@ -40,6 +43,22 @@ export async function ArtworkDetail({ slug, section }: { slug: string; section: 
   const related = (await getArtworks([card.category])).filter((a) => a.id !== card.id).slice(0, 4);
   const price = artworkPrice(card.category, DEFAULT_SIZE_INDEX);
 
+  const customizerArt: CustomizerArt = {
+    id: card.id,
+    slug: card.slug,
+    name: card.name,
+    code: card.code,
+    description: card.description,
+    category: card.category,
+    imageUrl: card.imageUrl,
+    width: card.width,
+    height: card.height,
+    available: row.status === "AVAILABLE",
+  };
+  // Mobile kicker, e.g. "PORTRAIT · CHARCOAL AND GRAPHITE".
+  const medium = (group?.medium ?? "").replace(/\s+on paper$/i, "");
+  const mobileKicker = medium ? `${CATEGORY_LABEL[card.category]} · ${medium}` : CATEGORY_LABEL[card.category];
+
   return (
     <>
       <script
@@ -61,6 +80,12 @@ export async function ArtworkDetail({ slug, section }: { slug: string; section: 
         }}
       />
 
+      {/* Below 900px: the mobile artwork screen. From 900px: the desktop page, unchanged. */}
+      <div className="min-[900px]:hidden">
+        <MobileArtwork art={customizerArt} kicker={mobileKicker} />
+      </div>
+
+      <div className="max-[900px]:hidden">
       <ArtworkIntro
         name={card.name}
         imageUrl={card.imageUrl}
@@ -78,21 +103,7 @@ export async function ArtworkDetail({ slug, section }: { slug: string; section: 
           ← BACK TO {categoryLabel}
         </Link>
 
-        <ProductCustomizer
-          art={{
-            id: card.id,
-            slug: card.slug,
-            name: card.name,
-            code: card.code,
-            description: card.description,
-            category: card.category,
-            imageUrl: card.imageUrl,
-            width: card.width,
-            height: card.height,
-            available: row.status === "AVAILABLE",
-          }}
-          categoryLabel={categoryLabel}
-        />
+        <ProductCustomizer art={customizerArt} categoryLabel={categoryLabel} />
 
         {related.length > 0 && (
           <div className="mt-[120px]">
@@ -124,6 +135,7 @@ export async function ArtworkDetail({ slug, section }: { slug: string; section: 
             </div>
           </div>
         )}
+      </div>
       </div>
     </>
   );

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ZenomLockup } from "@/components/brand/ZenomLockup";
 import { Reveal } from "@/components/motion/Reveal";
 import { WHATSAPP_NUMBER } from "@/lib/pricing";
+import { CONTACT_EMAIL } from "@/lib/site";
 
 const COLUMNS = [
   {
@@ -38,9 +39,61 @@ const COLUMNS = [
   },
 ];
 
+// Below 900px: the compact footer from the mobile reference (Main.dc.html).
+const MOBILE_LINKS = [
+  { href: "/portraits", label: "Portraits" },
+  { href: `https://wa.me/${WHATSAPP_NUMBER}`, label: "WhatsApp", external: true },
+  { href: "/abstract", label: "Abstract" },
+  { href: "https://instagram.com/zenom.studio", label: "Instagram", external: true },
+  { href: "/pricing", label: "Pricing" },
+  { href: `mailto:${CONTACT_EMAIL}`, label: "Email" },
+];
+
+function MobileFooter() {
+  return (
+    <footer
+      className="relative z-[2] flex flex-col gap-6 bg-night-deep px-6 pt-10 min-[900px]:hidden"
+      style={{ paddingBottom: "calc(40px + env(safe-area-inset-bottom))" }}
+    >
+      <nav aria-label="Footer" className="grid grid-cols-2 gap-x-6 text-[14px]">
+        {MOBILE_LINKS.map((l) =>
+          l.href.startsWith("/") ? (
+            <Link key={l.label} href={l.href} className="zf flex min-h-[44px] items-center rounded-md text-ink hover:text-ember">
+              {l.label}
+            </Link>
+          ) : (
+            <a
+              key={l.label}
+              href={l.href}
+              {...(l.external ? { target: "_blank", rel: "noreferrer" } : {})}
+              className="zf flex min-h-[44px] items-center rounded-md text-ink hover:text-ember"
+            >
+              {l.label}
+            </a>
+          )
+        )}
+      </nav>
+      <div className="zk flex items-center justify-between gap-3 tracking-[0.16em] text-ink-3">
+        <span>© {new Date().getFullYear()} Zenom Studio</span>
+        <span className="flex items-center">
+          <Link href="/privacy" className="zf flex min-h-[44px] items-center rounded-md px-1 text-ink-3 hover:text-ink">
+            Privacy
+          </Link>
+          <span aria-hidden>·</span>
+          <Link href="/terms" className="zf flex min-h-[44px] items-center rounded-md px-1 text-ink-3 hover:text-ink">
+            Terms
+          </Link>
+        </span>
+      </div>
+    </footer>
+  );
+}
+
 export function Footer() {
   return (
-    <footer className="relative z-[2] overflow-hidden border-t border-ink/[0.06] bg-night-deep px-6 pt-20">
+    <>
+    <MobileFooter />
+    <footer className="relative z-[2] overflow-hidden border-t border-ink/[0.06] bg-night-deep px-6 pt-20 max-[900px]:hidden">
       <div className="mx-auto grid max-w-container gap-10 [grid-template-columns:repeat(auto-fit,minmax(160px,1fr))]">
         <Reveal className="min-w-[240px] [grid-column:span_2]">
           <ZenomLockup variant="horizontal" tone="dark" size={0.6} className="-ml-3 mb-7" />
@@ -94,5 +147,6 @@ export function Footer() {
         </Reveal>
       </div>
     </footer>
+    </>
   );
 }

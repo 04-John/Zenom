@@ -135,21 +135,93 @@ export async function sendContactMessage(params: { name: string; email: string; 
 // first (see /api/orders), then attempt email, then log + allow retry.
 export async function sendOrderEmails(params: OrderEmailInput) {
   const breakdown = breakdownHtml(params);
+  // Commission requests from the app may come without an email (WhatsApp only).
+  const hasEmail = params.customerEmail.trim().length > 0;
 
-  const customer = await deliver({
-    to: params.customerEmail,
-    subject: `Order ${params.orderNumber} received — Zenom Studio`,
-    html: `${emailHeader()}<p>Hi ${escapeHtml(params.customerName)},</p><p>We've received your order <strong>${params.orderNumber}</strong>. We'll confirm final details with you on WhatsApp shortly.</p>${breakdown}`,
-  });
+  const customer = hasEmail
+    ? await deliver({
+        to: params.customerEmail,
+        subject: `Order ${params.orderNumber} received — Zenom Studio`,
+        html: `${emailHeader()}<p>Hi ${escapeHtml(params.customerName)},</p><p>We've received your order <strong>${params.orderNumber}</strong>. We'll confirm final details with you on WhatsApp shortly.</p>${breakdown}`,
+      })
+    : { sent: false };
 
   if (process.env.ORDER_NOTIFICATION_EMAIL) {
     await deliver({
       to: process.env.ORDER_NOTIFICATION_EMAIL,
-      replyTo: params.customerEmail,
+      replyTo: hasEmail ? params.customerEmail : undefined,
       subject: `New order ${params.orderNumber}`,
-      html: `${emailHeader()}<p>New order from ${escapeHtml(params.customerName)} (${escapeHtml(params.customerEmail)}).</p>${breakdown}`,
+      html: `${emailHeader()}<p>New order from ${escapeHtml(params.customerName)}${hasEmail ? ` (${escapeHtml(params.customerEmail)})` : " (no email, WhatsApp only)"}.</p>${breakdown}`,
     });
   }
 
   return customer;
+}
+
+// Password reset link (see /api/auth/forgot-password). Valid for one hour.
+export async function sendPasswordResetEmail(params: { email: string; name?: string | null; token: string }) {
+  const url = `${SITE_URL}/reset-password?token=${params.token}`;
+  return deliver({
+    to: params.email,
+    subject: "Reset your Zenom Studio password",
+    html: `${emailHeader()}<p>Hi ${escapeHtml(params.name || "there")},</p><p>Someone (hopefully you) asked to reset the password for this Zenom Studio account. Choose a new one here:</p><p><a href="${url}">${url}</a></p><p>The link works once and expires in 1 hour. If you didn't ask for this, you can ignore this email: your password stays the same.</p>`,
+  });
+}
+
+// One email per step Samuel moves an order forward in the studio (see
+// PATCH /api/orders/[id]). Order updates are transactional, so they are
+// always sent when the order has an email address.
+export type StatusEmailInput = {
+  orderNumber: string;
+  orderId: string;
+  customerName: string;
+  customerEmail: string;
+  status: "AWAITING_DEPOSIT" | "CONFIRMED" | "IN_PRODUCTION" | "READY" | "COMPLETED" | "CANCELLED";
+  total: number; // kobo
+  deposit: number; // kobo
+  outsideKaduna: boolean;
+  /** true when the order is attached to an account, so the account link works */
+  hasAccount: boolean;
+};
+
+export async function sendOrderStatusEmail(p: StatusEmailInput) {
+  const ref = escapeHtml(p.orderNumber);
+  const balance = p.total - p.deposit;
+  const deliveryNote = p.outsideKaduna ? " Delivery outside Kaduna is quoted separately on WhatsApp." : "";
+  const copy: Record<StatusEmailInput["status"], { subject: string; body: string }> = {
+    AWAITING_DEPOSIT: {
+      subject: `Your quote is ready (${p.orderNumber})`,
+      body: `<p>Samuel has reviewed your order <strong>${ref}</strong>. The total is <strong>${formatNaira(p.total)}</strong>.${deliveryNote}</p><p>A 50% non-refundable deposit of <strong>${formatNaira(p.deposit)}</strong> starts the work. Payment details are sent on WhatsApp; please use ${ref} as the transfer reference.</p>`,
+    },
+    CONFIRMED: {
+      subject: `Deposit received (${p.orderNumber})`,
+      body: `<p>Thank you, your deposit for <strong>${ref}</strong> has arrived and your order is confirmed. Samuel will share the sketch on WhatsApp before the shading starts.</p>`,
+    },
+    IN_PRODUCTION: {
+      subject: `Samuel has started drawing (${p.orderNumber})`,
+      body: `<p>Your piece for <strong>${ref}</strong> is now being drawn by hand. We'll let you know as soon as it's ready.</p>`,
+    },
+    READY: {
+      subject: `Your piece is ready (${p.orderNumber})`,
+      body: `<p>Your piece for <strong>${ref}</strong> is finished. The balance of <strong>${formatNaira(balance)}</strong> is due on delivery. Samuel will arrange the delivery with you on WhatsApp.</p>`,
+    },
+    COMPLETED: {
+      subject: `Delivered, thank you (${p.orderNumber})`,
+      body: `<p>Your order <strong>${ref}</strong> is delivered and paid in full. Thank you for commissioning Zenom Studio; we hope you love it.</p>`,
+    },
+    CANCELLED: {
+      subject: `Order cancelled (${p.orderNumber})`,
+      body: `<p>Your order <strong>${ref}</strong> has been cancelled. If you have any questions, reply to Samuel on WhatsApp.</p>`,
+    },
+  };
+  const { subject, body } = copy[p.status];
+  const link = p.hasAccount
+    ? `<p><a href="${SITE_URL}/account/orders/${encodeURIComponent(p.orderId)}">See your order</a></p>`
+    : `<p>Create an account with this email address to follow your orders online: <a href="${SITE_URL}/signup">${SITE_URL}/signup</a></p>`;
+
+  return deliver({
+    to: p.customerEmail,
+    subject: `${subject} — Zenom Studio`,
+    html: `${emailHeader()}<p>Hi ${escapeHtml(p.customerName)},</p>${body}${link}`,
+  });
 }

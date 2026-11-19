@@ -100,8 +100,8 @@ export function ZenomMark({
       viewBox={MARK_VIEWBOX}
       width={size}
       height={size}
-      role="img"
-      aria-label={title}
+      // title="" marks a decorative use: hide it instead of announcing an unlabelled image.
+      {...(title ? { role: "img", "aria-label": title } : { "aria-hidden": true, focusable: "false" })}
       className={className}
       style={{ display: "block", overflow: "visible", flex: `0 0 ${size}px` }}
     >

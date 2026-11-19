@@ -2,6 +2,9 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { CATEGORY_LABEL, type Category } from "@/lib/pricing";
 import { CATEGORIES } from "@/lib/studio-stats";
+import { NOT_COMMISSION } from "@/lib/commission";
+import { ART_GROUPS, art } from "@/lib/catalog";
+import { ArtworksMobile, type ArtRow } from "@/components/mobile/studio/ArtworksMobile";
 import { linkPrimary } from "../buttonStyles";
 import { ArchiveProductButton } from "./ArchiveProductButton";
 import { ProductStatusSelect } from "./ProductStatusSelect";
@@ -15,6 +18,7 @@ const STATUS_TEXT: Record<string, string> = {
   COMING_SOON: "Coming soon",
   DRAFT: "Draft",
 };
+type ArtworksTiles = Parameters<typeof ArtworksMobile>[0]["tileImages"];
 const catLabel = (c: string) => CATEGORY_LABEL[c.toLowerCase() as Category] ?? c;
 
 export default async function StudioProductsPage({
@@ -26,32 +30,42 @@ export default async function StudioProductsPage({
   const status = STATUSES.find((s) => s === searchParams.status);
   const q = (searchParams.q ?? "").trim();
 
-  const [products, grouped, sold] = await Promise.all([
+  // One query for the whole catalogue (commission placeholders excluded):
+  // the desktop table is the filtered slice, the phone filters it in place.
+  const [all, sold] = await Promise.all([
     prisma.product.findMany({
-      where: {
-        ...(category && { category }),
-        ...(status && { status }),
-        ...(q && {
-          OR: [
-            { name: { contains: q, mode: "insensitive" } },
-            { archiveCode: { contains: q, mode: "insensitive" } },
-          ],
-        }),
-      },
+      where: NOT_COMMISSION,
       orderBy: [{ category: "asc" }, { archiveCode: "asc" }, { createdAt: "desc" }],
       include: { images: { orderBy: { order: "asc" }, take: 1 } },
     }),
-    prisma.product.groupBy({ by: ["category", "status"], _count: { _all: true } }),
     prisma.orderItem.groupBy({
       by: ["productId"],
       where: { order: { status: { not: "CANCELLED" } } },
       _sum: { quantity: true },
     }),
   ]);
+  const ql = q.toLowerCase();
+  const products = all.filter(
+    (p) =>
+      (!category || p.category === category) &&
+      (!status || p.status === status) &&
+      (!ql || p.name.toLowerCase().includes(ql) || (p.archiveCode ?? "").toLowerCase().includes(ql))
+  );
   const soldBy = new Map(sold.map((s) => [s.productId, s._sum.quantity ?? 0]));
-  const stock = (c: string) => grouped.filter((g) => g.category === c);
-  const onSale = (c: string) => stock(c).find((g) => g.status === "AVAILABLE")?._count._all ?? 0;
-  const totalIn = (c: string) => stock(c).reduce((a, g) => a + g._count._all, 0);
+  const onSale = (c: string) => all.filter((p) => p.category === c && p.status === "AVAILABLE").length;
+  const totalIn = (c: string) => all.filter((p) => p.category === c).length;
+
+  const mobileArts: ArtRow[] = all.map((p) => ({
+    id: p.id,
+    name: p.name,
+    code: p.archiveCode,
+    category: p.category,
+    status: p.status,
+    image: p.images[0]?.url ?? null,
+    ordered: soldBy.get(p.id) ?? 0,
+  }));
+  // Tile headers: the first catalogue piece of each room.
+  const tileImages = Object.fromEntries(ART_GROUPS.map((g) => [g.category.toUpperCase(), art(`${g.prefix}01`)])) as ArtworksTiles;
 
   const href = (over: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
@@ -62,7 +76,10 @@ export default async function StudioProductsPage({
   };
 
   return (
-    <div className="pb-24 pt-8">
+    <>
+    {/* Light studio app below 900px. */}
+    <ArtworksMobile arts={mobileArts} tileImages={tileImages} initialStatus={status ?? null} initialCategory={category ?? null} initialQ={q} />
+    <div className="pb-24 pt-8 max-[900px]:hidden">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <h1 className="h-section">Artworks</h1>
         <Link href="/studio/products/new" className={linkPrimary}>
@@ -164,6 +181,7 @@ export default async function StudioProductsPage({
         </table>
       </div>
     </div>
+    </>
   );
 }
 

@@ -4,6 +4,7 @@ import { CATEGORIES, RANGES, getDashboard, parseRange } from "@/lib/studio-stats
 import { linkPrimary, linkSecondary } from "./buttonStyles";
 import { StatusBadge } from "./StatusBadge";
 import { RevenueChart } from "./RevenueChart";
+import { OverviewMobile } from "@/components/mobile/studio/OverviewMobile";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,10 @@ export default async function StudioDashboard({ searchParams }: { searchParams: 
   const maxArt = Math.max(1, ...d.topArtworks.map((a) => a.pieces));
 
   return (
-    <div className="pb-24 pt-8">
+    <>
+    {/* Light studio app below 900px (same data). */}
+    <OverviewMobile d={d} range={range} />
+    <div className="pb-24 pt-8 max-[900px]:hidden">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="kicker">Admin</p>
@@ -210,6 +214,7 @@ export default async function StudioDashboard({ searchParams }: { searchParams: 
         </Link>
       </div>
     </div>
+    </>
   );
 }
 

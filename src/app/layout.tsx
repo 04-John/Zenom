@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "@/styles/fonts.css";
+// zenom-mobile.css loads before globals.css on purpose: Tailwind utilities must
+// win over its low-specificity helper classes (see the file header).
+import "@/styles/zenom-mobile.css";
 import "@/styles/globals.css";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -12,6 +15,8 @@ import { ScrollProgress } from "@/components/motion/ScrollProgress";
 import { AddToBagFly } from "@/components/cart/AddToBagFly";
 import { CartProvider } from "@/context/CartContext";
 import { ToastProvider } from "@/components/ui/Toast";
+import { LightToastProvider } from "@/components/mobile/ui/LightToast";
+import { MobileChromeGate } from "@/components/mobile/MobileChromeGate";
 
 export const metadata: Metadata = {
   title: "Zenom Studio — More than a portrait",
@@ -47,18 +52,28 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <ToastProvider>
-          <CartProvider>
-            <LenisProvider>
-              <IntroLoader />
-              <FilmGrain />
-              <ScrollProgress />
-              <CustomCursor />
-              <AddToBagFly />
-              <Header />
-              <PageTransition>{children}</PageTransition>
-              <Footer />
-            </LenisProvider>
-          </CartProvider>
+          <LightToastProvider>
+            <CartProvider>
+              <LenisProvider>
+                {/* Light-app routes (account, studio, commission, sign-in) draw their own
+                    chrome below 900px; the gate hides the dark storefront chrome there. */}
+                <MobileChromeGate>
+                  <IntroLoader />
+                  <FilmGrain />
+                  <ScrollProgress />
+                </MobileChromeGate>
+                <CustomCursor />
+                <AddToBagFly />
+                <MobileChromeGate>
+                  <Header />
+                </MobileChromeGate>
+                <PageTransition>{children}</PageTransition>
+                <MobileChromeGate>
+                  <Footer />
+                </MobileChromeGate>
+              </LenisProvider>
+            </CartProvider>
+          </LightToastProvider>
         </ToastProvider>
       </body>
     </html>

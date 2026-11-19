@@ -4,6 +4,7 @@ import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
+import { linkGuestOrders } from "@/lib/account-tokens";
 
 // Single auth system, single login page. Role-based routing happens
 // after authentication — there is deliberately no separate /admin-login.
@@ -42,6 +43,9 @@ export const authOptions: NextAuthOptions = {
         // Signup sends a verification link (see /api/auth/signup and
         // /api/auth/verify-email) — unverified accounts cannot log in.
         if (!user.emailVerified) throw new Error("EmailNotVerified");
+
+        // Orders placed with this (verified) email while signed out join the account.
+        await linkGuestOrders(user.id, user.email);
 
         return { id: user.id, email: user.email, name: user.name, role: user.role };
       },

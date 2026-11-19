@@ -2,13 +2,14 @@
 
 import { motion, useScroll } from "framer-motion";
 
-// 2px ember bar fixed to the top: scaleX(scrollY / maxScroll).
+// 2px ember bar fixed to the top: scaleX(scrollY / maxScroll). Desktop only:
+// the mobile storefront has its own top bar and no progress line.
 export function ScrollProgress() {
   const { scrollYProgress } = useScroll();
   return (
     <motion.div
       aria-hidden
-      className="pointer-events-none fixed left-0 top-0 z-[1160] h-[2px] w-full origin-left bg-ember"
+      className="pointer-events-none fixed left-0 top-0 z-[1160] h-[2px] w-full origin-left bg-ember max-[900px]:hidden"
       style={{ scaleX: scrollYProgress }}
     />
   );

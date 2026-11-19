@@ -78,7 +78,7 @@ function PinnedIntro({ name, imageUrl, width, height, kicker, medium }: Props) {
             boxShadow: "0 50px 120px rgba(0,0,0,0.7)",
           }}
         >
-          <Image src={imageUrl} alt={name} fill priority sizes="86vw" className="block object-cover" />
+          <Image src={imageUrl} alt={name} fill priority sizes="(max-width: 899.98px) 1px, 86vw" className="block object-cover" />
         </motion.div>
         <motion.div
           className="absolute top-[110px] font-mono text-[10px] uppercase tracking-[0.3em]"
@@ -103,7 +103,7 @@ function StaticIntro({ name, imageUrl, width, height, kicker }: Props) {
       <Backdrop imageUrl={imageUrl} />
       <div className="relative flex min-h-[70vh] flex-col items-center justify-end gap-10 px-6 pb-16 pt-32 text-center">
         <div className="relative w-[min(60vw,420px)] shadow-[0_50px_120px_rgba(0,0,0,0.7)]" style={{ aspectRatio: `${width} / ${height}` }}>
-          <Image src={imageUrl} alt={name} fill priority sizes="420px" className="object-cover" />
+          <Image src={imageUrl} alt={name} fill priority sizes="(max-width: 899.98px) 1px, 420px" className="object-cover" />
         </div>
         <Copy name={name} kicker={kicker} />
       </div>

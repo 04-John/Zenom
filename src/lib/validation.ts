@@ -29,6 +29,37 @@ export const checkoutSchema = z.object({
 
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
 
+// Commission request from the light app (/commission). Name and WhatsApp
+// are the only required contact fields; the price is recomputed server-side.
+export const commissionSchema = z.object({
+  kind: z.literal("commission"),
+  category: z.enum(["portrait", "geometric", "minimalistic", "figurative"]),
+  medium: z.enum(["Charcoal", "Graphite", "Colour pencil"]),
+  sizeIndex: z.number().int().min(0).max(SIZES.length - 1),
+  framed: z.boolean(),
+  subjectCount: z.number().int().min(1).max(MAX_SUBJECTS).default(1),
+  delivery: z.enum(["kaduna", "other"]),
+  neededBy: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .nullable(),
+  // Only Cloudinary uploads made through /api/uploads/signature are accepted.
+  photoUrl: z
+    .string()
+    .max(2000)
+    .regex(/^https:\/\/res\.cloudinary\.com\/[^\s]+$/)
+    .optional()
+    .nullable(),
+  customerName: z.string().trim().min(2).max(120),
+  customerPhone: z.string().trim().min(7).max(20),
+  customerEmail: z.string().trim().email().optional().or(z.literal("")),
+  deliveryAddress: z.string().trim().max(500).optional(),
+  notes: z.string().max(1000).optional(),
+});
+
+export type CommissionInput = z.infer<typeof commissionSchema>;
+
 // Admin product create/update — `pillar` is derived from `category` on the
 // server, never accepted from the client.
 export const productSchema = z.object({
