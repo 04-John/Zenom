@@ -2,12 +2,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { ART_GROUPS, art } from "@/lib/catalog";
 import { DELIVERY_KADUNA, SIZES, formatNaira, startingPrice, type Category } from "@/lib/pricing";
-import { MobileHero } from "./MobileHero";
+import { MobileHero, type HeroSlide } from "./MobileHero";
 
 // The minimal home below 900px (reference: Main.dc.html / Prototype "home"),
 // replacing the five pinned scroll chapters: hero, the rooms as a 4-row list,
-// "How it works" in 4 steps, a pricing card and a closing CTA. Static: room
-// counts come from the catalogue (ART_GROUPS), prices from lib/pricing.
+// "How it works" in 4 steps, a pricing card and a closing CTA. Room counts
+// come from the catalogue (ART_GROUPS), prices from lib/pricing; the hero
+// shows the studio's featured artworks when app/page.tsx passes any.
 
 const ROOMS: { n: string; category: Category; href: string; img: string }[] = [
   { n: "01", category: "portrait", href: "/portraits", img: "w01" },
@@ -34,12 +35,12 @@ const STEPS = [
 // Phones only; the hidden desktop copy asks for a 1px candidate.
 const thumb = (px: number) => `(max-width: 899.98px) ${px}px, 1px`;
 
-export function MobileHome() {
+export function MobileHome({ heroSlides }: { heroSlides?: HeroSlide[] }) {
   const from = formatNaira(Math.min(startingPrice("portrait"), startingPrice("geometric")));
 
   return (
     <>
-      <MobileHero />
+      <MobileHero slides={heroSlides} />
 
       <section aria-labelledby="m-rooms" className="flex flex-col gap-7 px-6 pb-6 pt-[72px]">
         <div className="flex flex-col gap-3">

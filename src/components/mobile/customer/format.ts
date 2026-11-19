@@ -7,6 +7,17 @@ export function prettyDate(ymd?: string | null): string {
   return `${+p[2]} ${MON[+p[1] - 1]} ${p[0]}`;
 }
 
+/**
+ * "12 Nov 2026" for a timestamp, in Kaduna time (UTC+1, no daylight saving),
+ * so the server render and the browser always agree.
+ */
+export function studioDate(iso?: string | null): string {
+  const t = Date.parse(iso ?? "");
+  if (Number.isNaN(t)) return "";
+  const d = new Date(t + 3_600_000);
+  return `${d.getUTCDate()} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
 /** Today as "YYYY-MM-DD" in the viewer's timezone (min for the date picker). */
 export function todayYmd(): string {
   const d = new Date();

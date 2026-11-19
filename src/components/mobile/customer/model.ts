@@ -1,19 +1,13 @@
 // Customer light app: the plain, serialisable order shape the client screens
-// use, plus the pure rules that turn a backend status into what the customer
-// sees (tracker step, chip, next step, documents, notification copy).
+// use, plus the pure rules that turn a backend status (and the customer's
+// own taps, and Samuel's progress photos) into what the customer sees
+// (tracker step, chip, next step, documents, notification copy).
 // Client-safe: no Prisma or server imports. The Prisma → CustomerOrder
 // mapping lives in ./server.ts.
 
 import { CATEGORY_LABEL, formatNaira, type Category } from "@/lib/pricing";
-import {
-  CUSTOMER_STAGE,
-  DRAWING_TIME,
-  ORDER_CHIP,
-  ORDER_FLOW,
-  QUOTE_TURNAROUND,
-  studioWhatsApp,
-  type OrderStatus,
-} from "@/lib/zenom-mobile";
+import type { StudioInfo } from "@/lib/studio-info";
+import { ORDER_CHIP, ORDER_FLOW, studioWhatsApp, type OrderStatus } from "@/lib/zenom-mobile";
 
 export type CustomerItem = {
   id: string;
@@ -29,20 +23,48 @@ export type CustomerItem = {
   breakdown: { artwork: number; framing: number; extra: number } | null;
   image: string;
   code: string | null;
+  /** "Charcoal" (commission requests only) */
   medium?: string;
+  /** the customer's reference photo (commission requests only) */
   photoUrl?: string;
   isCommission: boolean;
 };
 
-export type CustomerOrder = {
+export type PhotoStage = "SKETCH" | "SHADING" | "FINISHED";
+
+export const PHOTO_STAGES: { key: PhotoStage; label: string }[] = [
+  { key: "SKETCH", label: "Sketch" },
+  { key: "SHADING", label: "Shading" },
+  { key: "FINISHED", label: "Finished" },
+];
+
+export const PHOTO_STAGE_LABEL: Record<PhotoStage, string> = { SKETCH: "Sketch", SHADING: "Shading", FINISHED: "Finished" };
+
+/** A progress photo Samuel shared on the order (Cloudinary URL). */
+export type CustomerPhoto = { id: string; stage: PhotoStage; url: string; createdAt: string };
+
+/** The customer's taps, as POST /api/account/orders/[id] returns them (ISO or null). */
+export type OrderFlags = {
+  quoteAcceptedAt: string | null;
+  /** "I've made the transfer" */
+  customerPaidAt: string | null;
+  sketchApprovedAt: string | null;
+  /** latest "Ask for changes" text */
+  sketchFeedback: string | null;
+  sketchFeedbackAt: string | null;
+};
+
+export type CustomerOrder = OrderFlags & {
   id: string;
   orderNumber: string;
   status: OrderStatus;
   createdAt: string;
   updatedAt: string;
+  /** updatedAt, or the newest progress photo if that's later (ISO) */
+  lastActivityAt: string;
   /** "12 Nov 2026" */
   requestedLabel: string;
-  /** "Today", "3d ago"… (computed on the server, so no hydration drift) */
+  /** "Today", "3d ago"… of lastActivityAt (computed on the server, so no hydration drift) */
   updatedAgo: string;
   /** e.g. "Portrait from your photo" or "Blindfold + 1 more" */
   title: string;
@@ -53,7 +75,9 @@ export type CustomerOrder = {
   image: string;
   isCommission: boolean;
   medium?: string;
+  /** "YYYY-MM-DD" */
   neededBy?: string;
+  /** the customer's own words from the request */
   notes: string;
   delivery: "KADUNA" | "OUTSIDE";
   deliveryFee: number;
@@ -66,6 +90,10 @@ export type CustomerOrder = {
   /** "" when the customer left it for WhatsApp */
   deliveryAddress: string;
   items: CustomerItem[];
+  /** Samuel's progress photos, oldest first */
+  photos: CustomerPhoto[];
+  /** set when Samuel marks the order delivered (ISO) */
+  deliveredAt: string | null;
 };
 
 export type CustomerUser = { name: string | null; email: string | null };
@@ -80,16 +108,85 @@ export function reached(status: OrderStatus, min: OrderStatus): boolean {
   return ORDER_FLOW.indexOf(status) >= ORDER_FLOW.indexOf(min);
 }
 
-export function stageOf(status: OrderStatus): { step: number; label: string } {
-  if (status === "CANCELLED") return { step: 0, label: "Cancelled" };
-  const s = CUSTOMER_STAGE[status];
-  return { step: s.step, label: s.label };
+export const photosOf = (o: Pick<CustomerOrder, "photos">, stage: PhotoStage) => o.photos.filter((p) => p.stage === stage);
+
+/** The newest sketch photo (the one the customer approves), or null. */
+export function latestSketch(o: Pick<CustomerOrder, "photos">): CustomerPhoto | null {
+  const s = photosOf(o, "SKETCH");
+  return s[s.length - 1] ?? null;
+}
+
+/** The customer asked for changes after the newest sketch: Samuel owes a revised one. */
+export function feedbackPending(o: Pick<CustomerOrder, "photos" | "sketchFeedbackAt">): boolean {
+  const s = latestSketch(o);
+  return !!o.sketchFeedbackAt && !!s && Date.parse(o.sketchFeedbackAt) > Date.parse(s.createdAt);
+}
+
+/**
+ * Where the order is, from the customer's side. The taps never change the
+ * status (only Samuel does), so the same status can read differently:
+ * AWAITING_DEPOSIT is "quote" until they accept, "deposit" until they say
+ * they've paid, then "checking" while Samuel looks at his bank.
+ */
+export type Phase =
+  | "reviewing"
+  | "quote"
+  | "deposit"
+  | "checking"
+  | "sketching"
+  | "sketch"
+  | "revising"
+  | "drawing"
+  | "ready"
+  | "delivered"
+  | "cancelled";
+
+type PhaseInput = Pick<CustomerOrder, "status" | "photos" | "quoteAcceptedAt" | "customerPaidAt" | "sketchApprovedAt" | "sketchFeedbackAt">;
+
+export function phaseOf(o: PhaseInput): Phase {
+  switch (o.status) {
+    case "PENDING":
+      return "reviewing";
+    case "AWAITING_DEPOSIT":
+      return o.customerPaidAt ? "checking" : o.quoteAcceptedAt ? "deposit" : "quote";
+    case "CONFIRMED":
+    case "IN_PRODUCTION":
+      if (o.sketchApprovedAt) return "drawing";
+      if (!latestSketch(o)) return o.status === "CONFIRMED" ? "sketching" : "drawing";
+      return feedbackPending(o) ? "revising" : "sketch";
+    case "READY":
+      return "ready";
+    case "COMPLETED":
+      return "delivered";
+    case "CANCELLED":
+    default:
+      return "cancelled";
+  }
+}
+
+/** Tracker step (1–6, CUSTOMER_STAGES in zenom-mobile.ts) and label per phase. */
+const PHASE_STAGE: Record<Phase, { step: number; label: string }> = {
+  reviewing: { step: 1, label: "Reviewing" },
+  quote: { step: 2, label: "Quote ready" },
+  deposit: { step: 3, label: "Deposit due" },
+  checking: { step: 3, label: "Checking payment" },
+  sketching: { step: 4, label: "Sketching" },
+  sketch: { step: 4, label: "Sketch ready" },
+  revising: { step: 4, label: "Revising sketch" },
+  drawing: { step: 5, label: "Drawing" },
+  ready: { step: 5, label: "Ready" },
+  delivered: { step: 6, label: "Delivered" },
+  cancelled: { step: 0, label: "Cancelled" },
+};
+
+export function stageOf(o: PhaseInput): { step: number; label: string } {
+  return PHASE_STAGE[phaseOf(o)];
 }
 
 /** Prototype chip colours by tracker step (1 grey, 2–4 ember, 5 blue, 6 green). */
-export function customerChip(status: OrderStatus): { bg: string; fg: string; label: string } {
-  if (status === "CANCELLED") return { bg: ORDER_CHIP.CANCELLED[0], fg: ORDER_CHIP.CANCELLED[1], label: "Cancelled" };
-  const { step, label } = stageOf(status);
+export function customerChip(o: PhaseInput): { bg: string; fg: string; label: string } {
+  if (o.status === "CANCELLED") return { bg: ORDER_CHIP.CANCELLED[0], fg: ORDER_CHIP.CANCELLED[1], label: "Cancelled" };
+  const { step, label } = stageOf(o);
   if (step === 1) return { bg: "#EFEAE2", fg: "#4A433B", label };
   if (step <= 4) return { bg: "#FBE0CB", fg: "#6B3214", label };
   if (step === 5) return { bg: "#E4E8F2", fg: "#2E3A5C", label };
@@ -101,8 +198,22 @@ export const orderLine = (o: Pick<CustomerOrder, "title" | "size">) => (o.size ?
 
 export const isActive = (o: Pick<CustomerOrder, "status">) => o.status !== "COMPLETED" && o.status !== "CANCELLED";
 
-/** Orders waiting on the customer: the quote is out and the deposit is due. */
-export const needsAction = (o: Pick<CustomerOrder, "status">) => o.status === "AWAITING_DEPOSIT";
+/** What the "Needs your action" sheet shows for an order waiting on the customer, or null. */
+export function actionFor(o: CustomerOrder): { chip: string; cta: string } | null {
+  switch (phaseOf(o)) {
+    case "quote":
+      return { chip: "Quote ready", cta: `Accept quote of ${formatNaira(o.total)}` };
+    case "deposit":
+      return { chip: "Deposit due", cta: `Pay deposit of ${formatNaira(o.deposit)}` };
+    case "sketch":
+      return { chip: "Sketch ready", cta: "Approve the sketch" };
+    default:
+      return null;
+  }
+}
+
+/** Orders waiting on the customer: a quote to accept, a deposit to pay or a sketch to approve. */
+export const needsAction = (o: CustomerOrder) => actionFor(o) !== null;
 
 /* ── Money ── */
 
@@ -112,63 +223,144 @@ export const balanceOf = (o: Pick<CustomerOrder, "total" | "deposit">) => Math.m
 const deliveredPhrase = (o: Pick<CustomerOrder, "delivery">) =>
   o.delivery === "KADUNA" ? "delivered in Kaduna" : "plus delivery outside Kaduna, quoted on WhatsApp";
 
+/* ── The customer's buttons (POST /api/account/orders/[id]) ── */
+
+export type OrderAction = "accept-quote" | "paid" | "approve-sketch" | "request-changes";
+
+/** Toast after a successful tap. */
+export const ACTION_DONE: Record<OrderAction, string> = {
+  "accept-quote": "Quote accepted · Samuel knows",
+  paid: "Thanks · Samuel will check his bank",
+  "approve-sketch": "Sketch approved · thank you",
+  "request-changes": "Sent · Samuel will revise it",
+};
+
 /* ── The dark "Your next step" card ── */
 
-export type NextAction = { label: string; href: string; external?: boolean };
-export type NextStep = { title: string; body: string; primary?: NextAction; secondary?: NextAction };
+/**
+ * A button on the card: a link (`href`, WhatsApp when `external`), one of
+ * the order actions above, or "ask-changes", which opens the feedback sheet.
+ */
+export type NextAction = {
+  label: string;
+  href?: string;
+  external?: boolean;
+  action?: Exclude<OrderAction, "request-changes"> | "ask-changes";
+};
+
+export type NextStep = {
+  phase: Phase;
+  title: string;
+  body: string;
+  /** what the card shows under the body: bank details, the sketch to approve, or the customer's change request */
+  extra?: "bank" | "sketch" | "feedback";
+  primary?: NextAction;
+  secondary?: NextAction;
+};
 
 const wa = (label: string, text: string): NextAction => ({ label, href: studioWhatsApp(text), external: true });
 
-// The prototype's "Accept quote", "I've made the transfer", "Approve sketch"
-// and "I've received it" have no backend: they happen on WhatsApp. Each
-// button opens WhatsApp with a message ready to send; nothing changes here
-// until Samuel moves the order on.
-export function nextStepFor(o: CustomerOrder): NextStep {
+// "Accept quote", "I've made the transfer", "Approve sketch" and "Ask for
+// changes" are real buttons: they flag the order for Samuel and email him
+// (the status only moves when he does). "I've received it" still happens on
+// WhatsApp: Samuel marks the order delivered when the balance is paid.
+export function nextStepFor(o: CustomerOrder, info: Pick<StudioInfo, "bank" | "quoteTurnaround" | "drawingTime">): NextStep {
   const ref = o.orderNumber;
-  switch (o.status) {
-    case "PENDING":
+  const phase = phaseOf(o);
+  switch (phase) {
+    case "reviewing":
       return {
-        title: CUSTOMER_STAGE.PENDING.nextTitle,
-        body: `Your quote arrives on WhatsApp and here ${QUOTE_TURNAROUND}.`,
+        phase,
+        title: "Samuel is reviewing your request",
+        body: `Your quote arrives here and on WhatsApp ${info.quoteTurnaround}.`,
         secondary: wa("Message Samuel", `Hello Samuel, I'm checking on my request ${ref}.`),
       };
-    case "AWAITING_DEPOSIT":
+    case "quote":
       return {
-        title: CUSTOMER_STAGE.AWAITING_DEPOSIT.nextTitle,
-        body: `Your quote is ready: ${formatNaira(o.total)}, ${deliveredPhrase(o)}. Transfer the 50% deposit of ${formatNaira(o.deposit)} with reference ${ref}, then tell Samuel on WhatsApp. He starts as soon as it clears.`,
-        primary: wa("I've made the transfer", `Hello Samuel, I've transferred the ${formatNaira(o.deposit)} deposit for ${ref} (reference ${ref}).`),
-        secondary: wa("Request changes", `Hello Samuel, I'd like to discuss the quote for ${ref}.`),
+        phase,
+        title: "Your quote is ready",
+        body: `${formatNaira(o.total)}, ${deliveredPhrase(o)}. Accept it, then pay the 50% deposit of ${formatNaira(o.deposit)} and Samuel starts your sketch.`,
+        primary: { label: "Accept quote", action: "accept-quote" },
+        secondary: wa("Ask a question", `Hello Samuel, I have a question about the quote for ${ref}.`),
       };
-    case "CONFIRMED":
+    case "deposit":
       return {
-        title: CUSTOMER_STAGE.CONFIRMED.nextTitle,
-        body: "Deposit received. Samuel sketches the composition and sends it on WhatsApp. Approve it there, or ask for changes before shading starts.",
-        primary: wa("Approve sketch", `Hello Samuel, I approve the sketch for ${ref}.`),
-        secondary: wa("Ask for changes", `Hello Samuel, I'd like some changes to the sketch for ${ref}.`),
+        phase,
+        title: "Pay your deposit",
+        body: info.bank
+          ? `Transfer ${formatNaira(o.deposit)} (50%) to the account below, with ${ref} as the reference. Then tap I've made the transfer so Samuel can check his bank.`
+          : `Transfer ${formatNaira(o.deposit)} (50%) with ${ref} as the reference. Samuel sends the bank details on WhatsApp, so please wait for them before you transfer.`,
+        extra: info.bank ? "bank" : undefined,
+        primary: { label: "I've made the transfer", action: "paid" },
+        secondary: info.bank
+          ? wa("Ask a question", `Hello Samuel, I have a question about paying the deposit for ${ref}.`)
+          : wa("Ask for bank details", `Hello Samuel, please send the bank details for ${ref}.`),
       };
-    case "IN_PRODUCTION":
+    case "checking":
       return {
-        title: CUSTOMER_STAGE.IN_PRODUCTION.nextTitle,
-        body: `Shading and finishing by hand. Ready in ${DRAWING_TIME}. Samuel messages you when it's done.`,
-        secondary: wa("Message Samuel", `Hello Samuel, how is ${ref} coming along?`),
+        phase,
+        title: "Samuel is checking your transfer",
+        body: `Thanks for sending the ${formatNaira(o.deposit)} deposit. Samuel confirms it here once it shows in his bank, then starts your sketch.`,
+        secondary: wa("Send proof of payment", `Hello Samuel, here is my proof of payment for ${ref}.`),
       };
-    case "READY":
+    case "sketching":
       return {
-        title: CUSTOMER_STAGE.READY.nextTitle,
+        phase,
+        title: "Samuel is sketching",
+        body: "Deposit received, thank you. The sketch shows up here for you to approve before Samuel starts shading.",
+        secondary: wa("Message Samuel", `Hello Samuel, how is the sketch for ${ref} coming along?`),
+      };
+    case "sketch":
+      return {
+        phase,
+        title: "Approve the sketch",
+        body: "Your sketch is ready. Have a look, then approve it so Samuel can start shading, or ask for changes.",
+        extra: "sketch",
+        primary: { label: "Approve sketch", action: "approve-sketch" },
+        secondary: { label: "Ask for changes", action: "ask-changes" },
+      };
+    case "revising":
+      return {
+        phase,
+        title: "Samuel is revising the sketch",
+        body: "Thanks for your notes. The new sketch shows up here for you to approve.",
+        extra: "feedback",
+        secondary: wa("Message Samuel", `Hello Samuel, about the sketch changes for ${ref}.`),
+      };
+    case "drawing":
+      return o.status === "CONFIRMED"
+        ? {
+            phase,
+            title: "Sketch approved",
+            body: `Thank you! Samuel starts shading next. Your piece is ready in ${info.drawingTime}.`,
+            secondary: wa("Message Samuel", `Hello Samuel, about ${ref}.`),
+          }
+        : {
+            phase,
+            title: "Drawing in progress",
+            body: `Shading and finishing by hand. Ready in ${info.drawingTime}. Progress photos show up here as Samuel shares them.`,
+            secondary: wa("Message Samuel", `Hello Samuel, how is ${ref} coming along?`),
+          };
+    case "ready":
+      return {
+        phase,
+        title: "Your piece is ready",
         body: `Samuel arranges delivery with you on WhatsApp. The balance of ${formatNaira(balanceOf(o))} is due on delivery. Let him know once it arrives.`,
         primary: wa("I've received it", `Hello Samuel, I've received my piece for ${ref}. Thank you!`),
         secondary: wa("Message Samuel", `Hello Samuel, about delivery for ${ref}.`),
       };
-    case "COMPLETED":
+    case "delivered":
       return {
-        title: CUSTOMER_STAGE.COMPLETED.nextTitle,
+        phase,
+        title: "Delivered. Enjoy your piece.",
         body: "Your certificate of authenticity is in Documents. Balance settled on delivery.",
         primary: { label: "Commission another", href: "/commission?start=1" },
         secondary: { label: "View certificate", href: `/account/orders/${o.id}/documents/certificate` },
       };
-    case "CANCELLED":
+    case "cancelled":
     default:
       return {
+        phase,
         title: "This order was cancelled",
         body: "If that's a mistake, message Samuel on WhatsApp. You can always start a new request.",
         primary: { label: "Start a new commission", href: "/commission?start=1" },
@@ -199,27 +391,49 @@ export const docHref = (orderId: string, kind: DocKind) => `/account/orders/${or
 
 export function notificationFor(o: CustomerOrder): { title: string; body: string } {
   const line = `${o.orderNumber} · ${orderLine(o)}`;
-  switch (o.status) {
-    case "PENDING":
+  switch (phaseOf(o)) {
+    case "reviewing":
       return { title: "Request received", body: `${line} · Samuel is reviewing it` };
-    case "AWAITING_DEPOSIT":
+    case "quote":
       return { title: "Your quote is ready", body: `${line} · deposit ${formatNaira(o.deposit)}` };
-    case "CONFIRMED":
+    case "deposit":
+      return { title: "Deposit due", body: `${line} · ${formatNaira(o.deposit)} by bank transfer` };
+    case "checking":
+      return { title: "Transfer sent", body: `${line} · Samuel is checking it` };
+    case "sketching":
       return { title: "Deposit received", body: `${line} · sketching starts` };
-    case "IN_PRODUCTION":
-      return { title: "Samuel started drawing", body: line };
-    case "READY":
+    case "sketch":
+      return { title: "Your sketch is ready", body: `${line} · approve it or ask for changes` };
+    case "revising":
+      return { title: "Changes requested", body: `${line} · Samuel is revising the sketch` };
+    case "drawing":
+      return o.status === "CONFIRMED"
+        ? { title: "Sketch approved", body: `${line} · shading starts next` }
+        : { title: "Samuel started drawing", body: line };
+    case "ready":
       return { title: "Your piece is ready", body: `${line} · delivery on WhatsApp` };
-    case "COMPLETED":
+    case "delivered":
       return { title: "Delivered", body: `${line} · certificate in Documents` };
-    case "CANCELLED":
+    case "cancelled":
     default:
       return { title: "Order cancelled", body: line };
   }
 }
 
-/** localStorage key for "this notification has been read": changes when the status changes. */
-export const notifKey = (o: Pick<CustomerOrder, "id" | "status">) => `${o.id}:${o.status}`;
+/**
+ * localStorage key for "this notification has been read". It changes when
+ * Samuel moves the order on (status) or shares a new sketch, but not when the
+ * customer taps a button themselves (accepting, paying, approving), so their
+ * own action never shows up as unread news.
+ */
+export function notifKey(o: CustomerOrder): string {
+  const phase = phaseOf(o);
+  const sketch = latestSketch(o);
+  if (sketch && (phase === "sketch" || phase === "revising" || (phase === "drawing" && o.status === "CONFIRMED"))) {
+    return `${o.id}:sketch:${sketch.id}`;
+  }
+  return `${o.id}:${o.status}`;
+}
 
 /* ── Misc ── */
 

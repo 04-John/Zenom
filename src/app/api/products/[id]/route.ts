@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -49,5 +50,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
   }
 
+  // The home hero shows featured pieces; refresh it whenever one changes.
+  revalidatePath("/");
   return NextResponse.json(product);
 }

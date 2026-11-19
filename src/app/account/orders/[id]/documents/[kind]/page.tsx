@@ -4,7 +4,9 @@ import { notFound, redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { ART_GROUPS } from "@/lib/catalog";
 import { WHATSAPP_NUMBER, formatNaira } from "@/lib/pricing";
-import { BANK_DETAILS, ORDER_LABEL, fmtDate } from "@/lib/zenom-mobile";
+import type { BankDetails } from "@/lib/studio-info";
+import { getStudioInfo } from "@/lib/studio-settings";
+import { ORDER_LABEL, fmtDate } from "@/lib/zenom-mobile";
 import { ZenomMark } from "@/components/brand/ZenomMark";
 import { BackBar, LightPage } from "@/components/mobile/ui";
 import { PrintButton } from "@/components/mobile/customer/PrintButton";
@@ -35,7 +37,7 @@ export default async function OrderDocumentPage({ params }: { params: { id: stri
   if (!isDocKind(params.kind)) notFound();
   const kind: DocKind = params.kind;
 
-  const order = await getCustomerOrder(userId, params.id);
+  const [order, info] = await Promise.all([getCustomerOrder(userId, params.id), getStudioInfo()]);
   if (!order) notFound();
   const meta = DOC_META[kind];
   const ready = docReady(order.status, kind);
@@ -68,7 +70,7 @@ export default async function OrderDocumentPage({ params }: { params: { id: stri
               style={{ background: "#ffffff", border: "1px solid #E8E2D8", borderRadius: 20, padding: "22px 20px", display: "flex", flexDirection: "column", gap: 20, color: "#1A1714" }}
             >
               <DocHeader title={meta.title} order={order} />
-              {kind === "invoice" && <Invoice o={order} />}
+              {kind === "invoice" && <Invoice o={order} bank={info.bank} />}
               {kind === "receipt" && <Receipt o={order} />}
               {kind === "certificate" && <Certificate o={order} />}
               <p style={{ margin: 0, fontSize: 11, color: "#6E665C", borderTop: "1px solid #EFEAE2", paddingTop: 12 }}>
@@ -146,7 +148,7 @@ function Customer({ o }: { o: CustomerOrder }) {
   );
 }
 
-function Invoice({ o }: { o: CustomerOrder }) {
+function Invoice({ o, bank }: { o: CustomerOrder; bank: BankDetails | null }) {
   return (
     <>
       <Section label="Billed to">
@@ -174,14 +176,12 @@ function Invoice({ o }: { o: CustomerOrder }) {
       </Section>
       <Section label="Payment">
         <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6 }}>
-          Bank transfer to <strong>{BANK_DETAILS.accountName}</strong>
-          {BANK_DETAILS.placeholder ? (
-            <> · bank and account number to confirm with Samuel on WhatsApp</>
-          ) : (
+          {bank ? (
             <>
-              {" "}
-              · {BANK_DETAILS.bank} · {BANK_DETAILS.accountNumber}
+              Bank transfer to <strong>{bank.accountName}</strong> · {bank.bank} · {bank.accountNumber}
             </>
+          ) : (
+            <>Bank transfer · bank and account details to confirm with Samuel on WhatsApp</>
           )}
           . Use the reference <strong>{o.orderNumber}</strong>. The deposit is non-refundable.
         </p>
@@ -244,7 +244,7 @@ function Certificate({ o }: { o: CustomerOrder }) {
         <div>
           <Line k="Collector" v={o.customerName} />
           <Line k="Order" v={o.orderNumber} />
-          <Line k="Delivered" v={fmtDate(o.updatedAt)} />
+          <Line k="Delivered" v={fmtDate(o.deliveredAt ?? o.updatedAt)} />
         </div>
       </Section>
       <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 12 }}>

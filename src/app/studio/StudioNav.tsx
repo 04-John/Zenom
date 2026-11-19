@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/studio", label: "Overview", exact: true },
   { href: "/studio/orders", label: "Orders" },
   { href: "/studio/products", label: "Artworks" },
+  { href: "/studio/settings", label: "Settings" },
 ];
 
 export function StudioNav({ name }: { name: string }) {

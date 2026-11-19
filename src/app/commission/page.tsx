@@ -2,6 +2,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { SIZES, type Category } from "@/lib/pricing";
+import { getStudioInfo } from "@/lib/studio-settings";
+import { StudioInfoProvider } from "@/components/StudioInfoProvider";
 import { LightPage } from "@/components/mobile/ui";
 import { CommissionFlow, type CommissionPrefill } from "@/components/mobile/customer/commission/CommissionFlow";
 import { getRooms } from "@/components/mobile/customer/server";
@@ -44,7 +46,7 @@ export default async function CommissionPage({ searchParams }: { searchParams: {
     }
   }
 
-  const rooms = await getRooms();
+  const [rooms, info] = await Promise.all([getRooms(), getStudioInfo()]);
   const sizeNum = Number(searchParams.size);
   const prefill: CommissionPrefill = {
     name: user?.name ?? "",
@@ -56,8 +58,10 @@ export default async function CommissionPage({ searchParams }: { searchParams: {
   };
 
   return (
-    <LightPage desktop="column" className="min-[900px]:pt-24">
-      <CommissionFlow rooms={rooms} prefill={prefill} start={searchParams.start === "1"} signedIn={!!user?.id} />
-    </LightPage>
+    <StudioInfoProvider value={info}>
+      <LightPage desktop="column" className="min-[900px]:pt-24">
+        <CommissionFlow rooms={rooms} prefill={prefill} start={searchParams.start === "1"} signedIn={!!user?.id} />
+      </LightPage>
+    </StudioInfoProvider>
   );
 }

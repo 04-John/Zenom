@@ -1,31 +1,35 @@
 "use client";
 
 import Image from "next/image";
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { art } from "@/lib/catalog";
 import { WHATSAPP_NUMBER } from "@/lib/pricing";
-import { DRAWING_TIME, QUOTE_TURNAROUND, studioWhatsApp } from "@/lib/zenom-mobile";
+import type { StudioInfo } from "@/lib/studio-info";
+import { studioWhatsApp } from "@/lib/zenom-mobile";
+import { useStudioInfo } from "@/components/StudioInfoProvider";
 import { Icon, LightPage } from "@/components/mobile/ui";
 import { prettyPhone } from "./model";
 import { SubHeader } from "./SubHeader";
 
-// The prototype's TOPICS copy. Two answers are adjusted to what the app does
-// today: there is no in-app transfer button or proof upload (that happens on
-// WhatsApp), and the quote time uses the studio's QUOTE_TURNAROUND.
-const TOPICS: [string, [string, string][]][] = [
+// The prototype's FAQ copy, matched to what the app does: the deposit is
+// a bank transfer the customer reports with "I've made the transfer", the
+// sketch is approved on the order page, and the quote and drawing times are
+// the ones Samuel sets in the studio (useStudioInfo).
+const topicsFor = (info: StudioInfo): [string, [string, string][]][] => [
   [
     "Commissioning",
     [
-      ["How do I commission a piece?", `Tap Start a commission, pick a room and size, add your photo and details. You get a reference number straight away and Samuel sends your quote on WhatsApp ${QUOTE_TURNAROUND}.`],
+      ["How do I commission a piece?", `Tap Start a commission, pick a room and size, add your photo and details. You get a reference number straight away and Samuel sends your quote ${info.quoteTurnaround}.`],
       ["Can I send my own photo?", "Yes. For portraits, a clear, well-lit photo works best. You can also send it later on WhatsApp."],
-      ["How long does a piece take?", `Most pieces take 10 to 21 days after the deposit, depending on size and detail. Once drawing starts, expect ${DRAWING_TIME}.`],
+      ["Will I see the sketch first?", "Yes. Samuel shares the sketch on your order page. Tap Approve sketch, or Ask for changes and tell him what to adjust. Progress photos show up there too."],
+      ["How long does a piece take?", `Most pieces take 10 to 21 days after the deposit, depending on size and detail. Once drawing starts, expect ${info.drawingTime}.`],
     ],
   ],
   [
     "Payments",
     [
       ["When do I pay?", "Nothing is charged until you accept the quote. A 50% non-refundable deposit starts the work; the balance is due on delivery."],
-      ["How do I pay the deposit?", "By bank transfer, using your order reference. Then tap I've made the transfer on the order to tell Samuel on WhatsApp, and send proof there if you have it."],
+      ["How do I pay the deposit?", "By bank transfer, using your order reference. Then tap I've made the transfer on the order. Samuel gets a message, checks his bank and confirms it on your order."],
       ["Is the deposit refundable?", "No. Samuel starts sketching as soon as it clears, so the deposit is non-refundable."],
     ],
   ],
@@ -47,16 +51,18 @@ const TOPICS: [string, [string, string][]][] = [
 
 /** Help (/account/help): search, topic cards, FAQ accordion, message Samuel. */
 export function HelpScreen() {
+  const info = useStudioInfo();
+  const topics = useMemo(() => topicsFor(info), [info]);
   const [topic, setTopic] = useState(0);
-  const [open, setOpen] = useState<string | null>(TOPICS[0][1][0][0]);
+  const [open, setOpen] = useState<string | null>(topics[0][1][0][0]);
   const [q, setQ] = useState("");
   const uid = useId();
 
   const needle = q.trim().toLowerCase();
   const faqs: [string, string][] = needle
-    ? TOPICS.flatMap(([, list]) => list).filter(([qq, a]) => (qq + " " + a).toLowerCase().includes(needle))
-    : TOPICS[topic][1];
-  const heading = needle ? `Results for “${q.trim()}”` : TOPICS[topic][0];
+    ? topics.flatMap(([, list]) => list).filter(([qq, a]) => (qq + " " + a).toLowerCase().includes(needle))
+    : topics[topic][1];
+  const heading = needle ? `Results for “${q.trim()}”` : topics[topic][0];
 
   return (
     <LightPage desktop="column" tabBar className="min-[900px]:pt-24">
@@ -83,7 +89,7 @@ export function HelpScreen() {
 
         {!needle && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-            {TOPICS.map(([title, list], i) => (
+            {topics.map(([title, list], i) => (
               <button
                 key={title}
                 type="button"

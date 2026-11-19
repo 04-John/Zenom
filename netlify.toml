@@ -1,5 +1,7 @@
 [build]
-  command = "npm run build"
+  # Production deploys apply pending database migrations first (see
+  # scripts/migrate-deploy.mjs); previews and local builds skip that step.
+  command = "node scripts/migrate-deploy.mjs && npm run build"
 
 [build.environment]
   NODE_VERSION = "20"

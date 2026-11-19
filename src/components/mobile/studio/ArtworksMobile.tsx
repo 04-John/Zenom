@@ -20,6 +20,8 @@ export type ArtRow = {
   status: ArtworkStatus;
   image: string | null;
   ordered: number;
+  /** "Show on home page" (the home slideshow) */
+  featured: boolean;
 };
 
 const catLabel = (c: DbCategory) => CATEGORY_LABEL[fromDbCategory(c)];
@@ -230,6 +232,7 @@ export function ArtworksMobile({
                         {catLabel(a.category)}
                         {a.code ? ` · ${a.code}` : ""} · {a.ordered} ordered
                       </span>
+                      {a.featured && <span style={{ fontSize: 11, fontWeight: 600, color: "#9A4A1F" }}>On home page</span>}
                     </span>
                   </Link>
                   <button

@@ -36,7 +36,9 @@ export async function POST(req: NextRequest) {
 
   await prisma.user.update({
     where: { id: userId },
-    data: { passwordHash: await bcrypt.hash(parsed.data.newPassword, 12) },
+    // sessionVersion +1 signs out every session, this one included; the
+    // client signs straight back in with the new password (ChangePasswordSheet).
+    data: { passwordHash: await bcrypt.hash(parsed.data.newPassword, 12), sessionVersion: { increment: 1 } },
   });
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, email: user.email });
 }

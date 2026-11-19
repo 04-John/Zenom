@@ -11,7 +11,7 @@ const schema = z.object({ token: z.string().min(1).max(200), password: z.string(
 // Step 2 of a password reset: the link from the email sets a new password.
 // The link is single use. Opening it also proves the person owns the email,
 // so an unverified account becomes verified and any guest orders placed with
-// that email are attached to it.
+// that email are attached to it. Every existing session is signed out.
 export async function POST(req: NextRequest) {
   const { allowed } = rateLimit(`reset:${clientIp(req)}`, 10, 15 * 60 * 1000);
   if (!allowed) {
@@ -37,7 +37,8 @@ export async function POST(req: NextRequest) {
   const passwordHash = await bcrypt.hash(parsed.data.password, 12);
   await prisma.user.update({
     where: { id: user.id },
-    data: { passwordHash, emailVerified: user.emailVerified ?? new Date() },
+    // sessionVersion +1 signs out every device that was signed in before.
+    data: { passwordHash, emailVerified: user.emailVerified ?? new Date(), sessionVersion: { increment: 1 } },
   });
   await clearResetTokens(email);
   await linkGuestOrders(user.id, email);

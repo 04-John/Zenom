@@ -131,18 +131,6 @@ export const LIGHT = {
   ease: "cubic-bezier(.22,1,.36,1)", spring: "cubic-bezier(.34,1.56,.64,1)",
 };
 
-/* ── Placeholder copy the studio still has to confirm (see the handoff README) ── */
-/** TODO(owner): real bank details for deposits. Shown on the customer's Payments tab. */
-export const BANK_DETAILS = {
-  bank: "Bank name (to confirm)",
-  accountName: "Zenom Studio",
-  accountNumber: "0000000000",
-  placeholder: true,
-};
-/** TODO(owner): confirm the quote turnaround and typical drawing time. */
-export const QUOTE_TURNAROUND = "within 24 hours";
-export const DRAWING_TIME = "about 10 days";
-
 /* ── Formatting ── */
 /** "₦45k", "₦1.25m" from kobo (compact, for bars and price tables). */
 export function kfmt(kobo: number): string {

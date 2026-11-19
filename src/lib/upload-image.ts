@@ -1,11 +1,12 @@
 // Browser-side signed upload to Cloudinary (see /api/uploads/signature).
-// purpose "artwork" = admin product image; "commission" = a customer's
-// reference photo (guests allowed, rate limited). Returns the secure URL.
-export async function uploadImage(file: File, purpose: "artwork" | "commission" = "artwork"): Promise<string> {
+// purpose "artwork" = admin product image; "progress" = admin progress photo
+// on an order; "commission" = a customer's reference photo (guests allowed,
+// rate limited). Returns the secure URL.
+export async function uploadImage(file: File, purpose: "artwork" | "progress" | "commission" = "artwork"): Promise<string> {
   const sigRes = await fetch("/api/uploads/signature", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(purpose === "commission" ? { purpose: "commission" } : {}),
+    body: JSON.stringify(purpose === "artwork" ? {} : { purpose }),
   });
   if (!sigRes.ok) {
     const body = await sigRes.json().catch(() => ({}));

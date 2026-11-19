@@ -63,6 +63,7 @@ export default async function StudioProductsPage({
     status: p.status,
     image: p.images[0]?.url ?? null,
     ordered: soldBy.get(p.id) ?? 0,
+    featured: p.featured,
   }));
   // Tile headers: the first catalogue piece of each room.
   const tileImages = Object.fromEntries(ART_GROUPS.map((g) => [g.category.toUpperCase(), art(`${g.prefix}01`)])) as ArtworksTiles;
@@ -147,7 +148,10 @@ export default async function StudioProductsPage({
                     ) : (
                       <span className="h-12 w-12 rounded-tile bg-ink/10" />
                     )}
-                    <span>{p.name}</span>
+                    <span>
+                      {p.name}
+                      {p.featured && <span className="block text-xs text-ember">On home page</span>}
+                    </span>
                   </div>
                 </td>
                 <td className="px-5 py-3 text-ink-2">{catLabel(p.category)}</td>

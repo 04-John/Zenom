@@ -47,7 +47,7 @@ export const authOptions: NextAuthOptions = {
         // Orders placed with this (verified) email while signed out join the account.
         await linkGuestOrders(user.id, user.email);
 
-        return { id: user.id, email: user.email, name: user.name, role: user.role };
+        return { id: user.id, email: user.email, name: user.name, role: user.role, sessionVersion: user.sessionVersion };
       },
     }),
   ],
@@ -56,10 +56,34 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.role = (user as any).role;
         token.id = (user as any).id;
+        token.sv = (user as any).sessionVersion ?? 0;
+        return token;
+      }
+      // Every server-side session read re-checks the account: a password
+      // reset/change bumps User.sessionVersion, which signs out every session
+      // made before it; a deleted account is signed out too; a role change
+      // applies at once. If the database can't be reached, the session is
+      // kept as it is (an outage must not sign everyone out).
+      if (typeof token.id === "string" && !token.revoked) {
+        try {
+          const current = await prisma.user.findUnique({
+            where: { id: token.id },
+            select: { sessionVersion: true, role: true },
+          });
+          if (!current || current.sessionVersion !== ((token.sv as number | undefined) ?? 0)) {
+            return { revoked: true } as typeof token;
+          }
+          token.role = current.role;
+        } catch (err) {
+          console.error("Session check skipped (database unavailable):", err);
+        }
       }
       return token;
     },
     async session({ session, token }) {
+      // An empty object makes getServerSession() return null and the client
+      // see "unauthenticated", so a revoked session behaves as signed out.
+      if (token.revoked) return {} as typeof session;
       if (session.user) {
         (session.user as any).role = token.role;
         (session.user as any).id = token.id;

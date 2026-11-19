@@ -7,7 +7,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { CATALOG, art } from "@/lib/catalog";
-import { NOT_COMMISSION, isCommissionSlug, parseCommissionNotes, freeTextNotes } from "@/lib/commission";
+import { NOT_COMMISSION, isCommissionSlug, isoDay, mediumLabel } from "@/lib/commission";
 import {
   CATEGORY_LABEL,
   SIZES,
@@ -18,7 +18,7 @@ import {
   type Category,
 } from "@/lib/pricing";
 import { ago, fmtDate, type OrderStatus } from "@/lib/zenom-mobile";
-import { ROOM_KEYS, displayPhoto, type CustomerItem, type CustomerOrder } from "./model";
+import { ROOM_KEYS, displayPhoto, type CustomerItem, type CustomerOrder, type CustomerPhoto } from "./model";
 
 export const ORDER_INCLUDE = Prisma.validator<Prisma.OrderInclude>()({
   items: {
@@ -34,6 +34,7 @@ export const ORDER_INCLUDE = Prisma.validator<Prisma.OrderInclude>()({
       },
     },
   },
+  photos: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { id: true, stage: true, url: true, createdAt: true } },
 });
 
 export type OrderRow = Prisma.OrderGetPayload<{ include: typeof ORDER_INCLUDE }>;
@@ -75,8 +76,7 @@ export function toCustomerOrder(o: OrderRow, now: number): CustomerOrder {
   const items: CustomerItem[] = o.items.map((it) => {
     const category = fromDbCategory(it.product.category);
     const isCommission = isCommissionSlug(it.product.slug);
-    const notes = parseCommissionNotes(it.notes, o.notes);
-    const rawPhoto = safeImage(notes.photoUrl);
+    const rawPhoto = safeImage(it.referencePhotoUrl);
     const photo = rawPhoto ? displayPhoto(rawPhoto) : null;
     const image = photo ?? safeImage(it.product.images[0]?.url) ?? ROOM_FALLBACK[category];
     return {
@@ -91,14 +91,21 @@ export function toCustomerOrder(o: OrderRow, now: number): CustomerOrder {
       breakdown: breakdownFor(category, it.sizeIndex, it.framed, it.subjectCount, it.unitPrice),
       image,
       code: isCommission ? null : it.product.archiveCode,
-      medium: notes.medium,
+      medium: mediumLabel(it.medium),
       photoUrl: photo ?? undefined,
       isCommission,
     };
   });
 
   const first = items[0];
-  const commissionNotes = parseCommissionNotes(o.items[0]?.notes, o.notes);
+  // Progress photos: only hosts next/image can load (in practice always Cloudinary).
+  const photos: CustomerPhoto[] = o.photos.flatMap((p) => {
+    const url = safeImage(p.url);
+    return url ? [{ id: p.id, stage: p.stage, url: displayPhoto(url), createdAt: p.createdAt.toISOString() }] : [];
+  });
+  // A new photo doesn't touch the order row, but it is news for the customer.
+  const newestPhoto = o.photos.length ? o.photos[o.photos.length - 1].createdAt : null;
+  const lastActivity = newestPhoto && newestPhoto > o.updatedAt ? newestPhoto : o.updatedAt;
   const title = !first ? "Order" : items.length > 1 ? `${first.title} + ${items.length - 1} more` : first.title;
   const address = o.deliveryAddress === "To confirm on WhatsApp" ? "" : o.deliveryAddress;
 
@@ -108,8 +115,9 @@ export function toCustomerOrder(o: OrderRow, now: number): CustomerOrder {
     status: o.status as OrderStatus,
     createdAt: o.createdAt.toISOString(),
     updatedAt: o.updatedAt.toISOString(),
+    lastActivityAt: lastActivity.toISOString(),
     requestedLabel: fmtDate(o.createdAt),
-    updatedAgo: ago(o.updatedAt, now),
+    updatedAgo: ago(lastActivity, now),
     title,
     size: first?.size ?? null,
     framed: first?.framed ?? false,
@@ -117,8 +125,8 @@ export function toCustomerOrder(o: OrderRow, now: number): CustomerOrder {
     image: first?.image ?? ROOM_FALLBACK.portrait,
     isCommission: !!first?.isCommission,
     medium: first?.medium,
-    neededBy: commissionNotes.neededBy,
-    notes: freeTextNotes(o.notes),
+    neededBy: isoDay(o.neededBy),
+    notes: o.notes?.trim() ?? "",
     delivery: o.delivery,
     deliveryFee: o.deliveryFee,
     subtotal: o.subtotal,
@@ -129,6 +137,13 @@ export function toCustomerOrder(o: OrderRow, now: number): CustomerOrder {
     customerEmail: o.customerEmail,
     deliveryAddress: address,
     items,
+    photos,
+    quoteAcceptedAt: o.quoteAcceptedAt?.toISOString() ?? null,
+    customerPaidAt: o.customerPaidAt?.toISOString() ?? null,
+    sketchApprovedAt: o.sketchApprovedAt?.toISOString() ?? null,
+    sketchFeedback: o.sketchFeedback?.trim() || null,
+    sketchFeedbackAt: o.sketchFeedbackAt?.toISOString() ?? null,
+    deliveredAt: o.deliveredAt?.toISOString() ?? null,
   };
 }
 

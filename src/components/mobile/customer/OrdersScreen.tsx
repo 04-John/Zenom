@@ -40,7 +40,7 @@ export function OrdersScreen({ newId }: { newId?: string }) {
     const needle = q.trim().toLowerCase();
     if (!needle) return orders;
     return orders.filter((o) =>
-      [o.orderNumber, o.title, o.size, o.medium, customerChip(o.status).label, ...o.items.map((i) => i.title)]
+      [o.orderNumber, o.title, o.size, o.medium, customerChip(o).label, ...o.items.map((i) => i.title)]
         .filter(Boolean)
         .some((s) => String(s).toLowerCase().includes(needle))
     );
@@ -91,7 +91,7 @@ export function OrdersScreen({ newId }: { newId?: string }) {
 }
 
 function OrderRow({ order: o, flash }: { order: CustomerOrder; flash: boolean }) {
-  const chip = customerChip(o.status);
+  const chip = customerChip(o);
   return (
     <Link href={`/account/orders/${o.id}`} className={"mrow" + (flash ? " row-new" : "")}>
       <Image src={o.image} alt="" width={80} height={100} sizes="40px" style={{ width: 40, height: 50, objectFit: "cover", borderRadius: 8, flex: "none" }} />

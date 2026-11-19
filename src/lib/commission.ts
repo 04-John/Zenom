@@ -5,17 +5,33 @@
 // unchanged (no migration on the live database), each request is saved as an
 // ordinary Order with one OrderItem that points at a hidden, per-category
 // "commission" Product (status DRAFT, slug "commission-<category>", created on
-// first use by /api/orders). Everything that reads orders (studio stats,
-// emails, order pages) keeps working, and category revenue stays correct.
-// The medium and the reference-photo URL live in the item's notes; the
-// "needed by" date lives in the order notes. This module is client-safe.
+// first use by /api/orders). The product ties the request to its room, so
+// everything that reads orders (studio stats, emails, order pages) keeps
+// working and category revenue stays correct. The medium and reference photo
+// are OrderItem columns (medium, referencePhotoUrl); the "needed by" date is
+// Order.neededBy. This module is client-safe.
 
+import type { Medium as DbMedium } from "@prisma/client";
 import { CATEGORY_LABEL, type Category } from "@/lib/pricing";
 
 export const COMMISSION_SLUG_PREFIX = "commission-";
 
 export const MEDIUMS = ["Charcoal", "Graphite", "Colour pencil"] as const;
 export type Medium = (typeof MEDIUMS)[number];
+export type { DbMedium };
+
+export const MEDIUM_TO_DB: Record<Medium, DbMedium> = {
+  Charcoal: "CHARCOAL",
+  Graphite: "GRAPHITE",
+  "Colour pencil": "COLOUR_PENCIL",
+};
+const MEDIUM_FROM_DB: Record<DbMedium, Medium> = { CHARCOAL: "Charcoal", GRAPHITE: "Graphite", COLOUR_PENCIL: "Colour pencil" };
+
+/** "Charcoal" from OrderItem.medium (undefined for artwork orders). */
+export const mediumLabel = (m: DbMedium | null | undefined): Medium | undefined => (m ? MEDIUM_FROM_DB[m] : undefined);
+
+/** "2026-12-24" from Order.neededBy (a date-only column, read back as UTC midnight). */
+export const isoDay = (d: Date | null | undefined): string | undefined => (d ? d.toISOString().slice(0, 10) : undefined);
 
 export const commissionSlug = (category: Category) => `${COMMISSION_SLUG_PREFIX}${category}`;
 export const isCommissionSlug = (slug: string | null | undefined) => !!slug?.startsWith(COMMISSION_SLUG_PREFIX);
@@ -23,30 +39,3 @@ export const commissionProductName = (category: Category) => `Commission · ${CA
 
 /** Prisma `where` fragment that hides the commission placeholders from artwork lists. */
 export const NOT_COMMISSION = { NOT: { slug: { startsWith: COMMISSION_SLUG_PREFIX } } } as const;
-
-const MEDIUM_RE = /^Medium: (.+)$/m;
-const PHOTO_RE = /^Reference photo: (https:\/\/\S+)$/m;
-const NEEDED_RE = /^Needed by: (\d{4}-\d{2}-\d{2})$/m;
-
-export function buildItemNotes(p: { medium?: string; photoUrl?: string | null }): string {
-  return [p.medium && `Medium: ${p.medium}`, p.photoUrl && `Reference photo: ${p.photoUrl}`].filter(Boolean).join("\n");
-}
-
-export function buildOrderNotes(p: { neededBy?: string | null; notes?: string | null }): string | undefined {
-  const s = [p.neededBy && `Needed by: ${p.neededBy}`, p.notes?.trim()].filter(Boolean).join("\n");
-  return s || undefined;
-}
-
-/** Reads back what buildItemNotes / buildOrderNotes wrote. */
-export function parseCommissionNotes(itemNotes?: string | null, orderNotes?: string | null) {
-  return {
-    medium: itemNotes?.match(MEDIUM_RE)?.[1],
-    photoUrl: itemNotes?.match(PHOTO_RE)?.[1],
-    neededBy: orderNotes?.match(NEEDED_RE)?.[1],
-  };
-}
-
-/** Order notes without the machine-written "Needed by" line (for display). */
-export function freeTextNotes(orderNotes?: string | null): string {
-  return (orderNotes ?? "").replace(NEEDED_RE, "").trim();
-}

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { formatNaira } from "@/lib/pricing";
 import { Chip, HeaderButton, Icon, PushBanner, Sheet, TabBar, useAutoRefresh, useLocalState, type TabItem } from "@/components/mobile/ui";
-import { needsAction, notifKey, notificationFor, orderLine, type CustomerOrder, type CustomerUser } from "./model";
+import { actionFor, needsAction, notifKey, notificationFor, orderLine, type CustomerOrder, type CustomerUser } from "./model";
 import { useIsMobile } from "./hooks";
 
 type SheetKind = "action" | "notif" | null;
@@ -62,14 +62,14 @@ export function CustomerChrome({
 
   const now = Date.now();
   const notifs = useMemo(
-    () => [...orders].sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt)),
+    () => [...orders].sort((a, b) => +new Date(b.lastActivityAt) - +new Date(a.lastActivityAt)),
     [orders]
   );
   const readSet = useMemo(() => new Set(read), [read]);
   // "Request received" is something the customer just did, and month-old
   // updates are history: neither starts out unread.
   const isUnread = useCallback(
-    (o: CustomerOrder) => readReady && !readSet.has(notifKey(o)) && o.status !== "PENDING" && now - +new Date(o.updatedAt) < MONTH,
+    (o: CustomerOrder) => readReady && !readSet.has(notifKey(o)) && o.status !== "PENDING" && now - +new Date(o.lastActivityAt) < MONTH,
     [readReady, readSet, now]
   );
   const unread = notifs.filter(isUnread).length;
@@ -154,16 +154,19 @@ export function CustomerChrome({
             }
           >
             <div className="stagger" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {actionOrders.map((o) => (
-                <Link key={o.id} href={`/account/orders/${o.id}`} className="ai" onClick={close}>
-                  <span style={{ display: "flex", width: "100%", justifyContent: "space-between", alignItems: "center" }}>
-                    <Chip bg="#FBEBDD" fg="#6B3214" style={{ height: 22, fontSize: 11 }}>Deposit due</Chip>
-                    <span style={{ fontSize: 11, color: "#4A433B" }}>{o.orderNumber}</span>
-                  </span>
-                  <strong style={{ fontSize: 15 }}>{orderLine(o)}</strong>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "#9A4A1F" }}>Pay deposit of {formatNaira(o.deposit)} →</span>
-                </Link>
-              ))}
+              {actionOrders.map((o) => {
+                const a = actionFor(o);
+                return (
+                  <Link key={o.id} href={`/account/orders/${o.id}`} className="ai" onClick={close}>
+                    <span style={{ display: "flex", width: "100%", justifyContent: "space-between", alignItems: "center" }}>
+                      <Chip bg="#FBEBDD" fg="#6B3214" style={{ height: 22, fontSize: 11 }}>{a?.chip}</Chip>
+                      <span style={{ fontSize: 11, color: "#4A433B" }}>{o.orderNumber}</span>
+                    </span>
+                    <strong style={{ fontSize: 15 }}>{orderLine(o)}</strong>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "#9A4A1F" }}>{a?.cta} →</span>
+                  </Link>
+                );
+              })}
               {actionOrders.length === 0 && (
                 <p className="sub" style={{ padding: "12px 0", textAlign: "center" }}>
                   You&apos;re all caught up.

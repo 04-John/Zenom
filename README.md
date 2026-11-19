@@ -44,8 +44,9 @@ All of these read `.env` via `node --env-file=.env`:
 - `replace-art.mjs w09=<file> …` — swaps in an updated artwork (resized to ~1600px); re-run `upload-art.mjs` after.
 - `sync-catalog-names.ts [--apply]` — applies titles from `catalog.ts` to existing products (run with
   `node --env-file=.env node_modules/ts-node/dist/bin.js scripts/sync-catalog-names.ts`).
-- `reset-admin-password.mjs [email]` — resets an existing admin's password (there is no forgot-password flow).
-  Set `NEW_ADMIN_PASSWORD` to choose one, or a random one is printed once.
+- `reset-admin-password.mjs [email]` — resets an existing admin's password from the command line (the
+  site also has a "Forgot password?" email flow). Set `NEW_ADMIN_PASSWORD` to choose one, or a random one is printed once.
+- `migrate-deploy.mjs` — run by Netlify before every production build (see "Deploying").
 - `make-brand-pngs.mjs` — regenerates the apple-touch icon, social card and email logo PNGs from the brand SVGs.
 
 ### Existing database (created with `prisma db push`)
@@ -112,3 +113,20 @@ status management, admin product CRUD (category, image upload).
 4. Run `npx prisma migrate deploy && npx prisma db seed` against the
    production database once before first deploy (see "Existing database"
    above if it was created with `db push`).
+
+### Database migrations on deploy
+
+The Netlify build command (`netlify.toml`) runs `scripts/migrate-deploy.mjs`
+before `npm run build`. On **production** deploys only, it applies any
+pending migrations in `prisma/migrations` with `prisma migrate deploy`, so a
+deploy that needs a database change ships with it. Deploy previews and
+branch deploys share the production database, so they never migrate it, and
+a local `npm run build` never does either.
+
+Prisma Migrate can't run through Neon's connection pooler, so the script uses
+`DIRECT_URL` if it's set, otherwise `DATABASE_URL` with `-pooler` removed from
+the host (Neon's direct connection). If a migration fails, the build fails and
+Netlify keeps the previous deploy live.
+
+Write migrations to be additive (new tables, nullable columns, columns with
+defaults), so the code that is live while the build runs keeps working.

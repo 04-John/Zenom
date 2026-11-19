@@ -10,6 +10,7 @@ import {
   type Category,
   type DeliveryZone,
 } from "@/lib/pricing";
+import type { BankDetails } from "@/lib/studio-info";
 
 // Two ways to send, picked by which env vars are set:
 //   1. Gmail SMTP (free, no domain needed): GMAIL_APP_PASSWORD (+ optional GMAIL_USER)
@@ -182,6 +183,8 @@ export type StatusEmailInput = {
   outsideKaduna: boolean;
   /** true when the order is attached to an account, so the account link works */
   hasAccount: boolean;
+  /** Studio bank details (Studio tab); null until Samuel fills them in. */
+  bank: BankDetails | null;
 };
 
 export async function sendOrderStatusEmail(p: StatusEmailInput) {
@@ -191,11 +194,17 @@ export async function sendOrderStatusEmail(p: StatusEmailInput) {
   const copy: Record<StatusEmailInput["status"], { subject: string; body: string }> = {
     AWAITING_DEPOSIT: {
       subject: `Your quote is ready (${p.orderNumber})`,
-      body: `<p>Samuel has reviewed your order <strong>${ref}</strong>. The total is <strong>${formatNaira(p.total)}</strong>.${deliveryNote}</p><p>A 50% non-refundable deposit of <strong>${formatNaira(p.deposit)}</strong> starts the work. Payment details are sent on WhatsApp; please use ${ref} as the transfer reference.</p>`,
+      body: `<p>Samuel has reviewed your order <strong>${ref}</strong>. The total is <strong>${formatNaira(p.total)}</strong>.${deliveryNote}</p><p>A 50% non-refundable deposit of <strong>${formatNaira(p.deposit)}</strong> starts the work.</p>${
+        p.bank
+          ? `<p>Pay by bank transfer to:<br><strong>${escapeHtml(p.bank.accountName)}</strong><br>${escapeHtml(p.bank.bank)} · ${escapeHtml(p.bank.accountNumber)}<br>Please use <strong>${ref}</strong> as the transfer reference.</p>`
+          : `<p>Samuel will send the payment details on WhatsApp; please use ${ref} as the transfer reference.</p>`
+      }${p.hasAccount ? `<p>Once you've paid, tap <em>I've made the transfer</em> on your order so Samuel knows to check.</p>` : ""}`,
     },
     CONFIRMED: {
       subject: `Deposit received (${p.orderNumber})`,
-      body: `<p>Thank you, your deposit for <strong>${ref}</strong> has arrived and your order is confirmed. Samuel will share the sketch on WhatsApp before the shading starts.</p>`,
+      body: `<p>Thank you, your deposit for <strong>${ref}</strong> has arrived and your order is confirmed. Samuel will share the sketch ${
+        p.hasAccount ? "on your order page" : "on WhatsApp"
+      } for your approval before the shading starts.</p>`,
     },
     IN_PRODUCTION: {
       subject: `Samuel has started drawing (${p.orderNumber})`,
@@ -223,5 +232,59 @@ export async function sendOrderStatusEmail(p: StatusEmailInput) {
     to: p.customerEmail,
     subject: `${subject} — Zenom Studio`,
     html: `${emailHeader()}<p>Hi ${escapeHtml(p.customerName)},</p>${body}${link}`,
+  });
+}
+
+// First sketch photo on an order (POST /api/orders/[id]/photos): ask the
+// customer to approve it or ask for changes before the shading starts.
+export async function sendSketchReadyEmail(p: {
+  orderNumber: string;
+  orderId: string;
+  customerName: string;
+  customerEmail: string;
+  hasAccount: boolean;
+}) {
+  const ref = escapeHtml(p.orderNumber);
+  const action = p.hasAccount
+    ? `<p><a href="${SITE_URL}/account/orders/${encodeURIComponent(p.orderId)}">See the sketch and approve it</a>, or ask for changes, before Samuel starts shading.</p>`
+    : `<p>Reply to Samuel on WhatsApp to approve it or ask for changes before he starts shading. Create an account with this email address to see the sketch online: <a href="${SITE_URL}/signup">${SITE_URL}/signup</a></p>`;
+  return deliver({
+    to: p.customerEmail,
+    subject: `Your sketch is ready (${p.orderNumber}) — Zenom Studio`,
+    html: `${emailHeader()}<p>Hi ${escapeHtml(p.customerName)},</p><p>Samuel has finished the sketch for <strong>${ref}</strong>.</p>${action}`,
+  });
+}
+
+// A customer tapped a button on their order (POST /api/account/orders/[id]).
+// The tap never changes the order status; this tells Samuel to act on it.
+export type StudioAlert = "accepted-quote" | "paid" | "approved-sketch" | "requested-changes";
+
+export async function sendStudioAlertEmail(p: {
+  alert: StudioAlert;
+  orderNumber: string;
+  orderId: string;
+  customerName: string;
+  customerEmail: string;
+  feedback?: string | null;
+}) {
+  const who = escapeHtml(p.customerName);
+  const copy: Record<StudioAlert, { subject: string; body: string }> = {
+    "accepted-quote": { subject: `Quote accepted: ${p.orderNumber}`, body: `<p>${who} accepted the quote. The deposit should follow.</p>` },
+    paid: {
+      subject: `Customer says they've paid: ${p.orderNumber}`,
+      body: `<p>${who} says they've transferred the deposit. Check your bank, then mark the deposit received in the studio.</p>`,
+    },
+    "approved-sketch": { subject: `Sketch approved: ${p.orderNumber}`, body: `<p>${who} approved the sketch. You can start shading.</p>` },
+    "requested-changes": {
+      subject: `Sketch changes requested: ${p.orderNumber}`,
+      body: `<p>${who} asked for changes to the sketch:</p><blockquote style="white-space:pre-wrap;margin:0 0 16px;padding-left:12px;border-left:3px solid #E58A52">${escapeHtml(p.feedback ?? "")}</blockquote>`,
+    },
+  };
+  const { subject, body } = copy[p.alert];
+  return deliver({
+    to: process.env.ORDER_NOTIFICATION_EMAIL || CONTACT_EMAIL,
+    replyTo: p.customerEmail.trim() || undefined,
+    subject,
+    html: `${emailHeader()}${body}<p><a href="${SITE_URL}/studio/orders/${encodeURIComponent(p.orderId)}">Open ${escapeHtml(p.orderNumber)} in the studio</a></p>`,
   });
 }

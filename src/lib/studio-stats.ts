@@ -4,7 +4,8 @@
 //  - Pipeline: orders still waiting on the deposit (PENDING, AWAITING_DEPOSIT).
 //  - Cash collected: the deposit on active orders, the full total once COMPLETED.
 import { prisma } from "@/lib/prisma";
-import { NOT_COMMISSION, isCommissionSlug, parseCommissionNotes } from "@/lib/commission";
+import { NOT_COMMISSION, isCommissionSlug } from "@/lib/commission";
+import { attentionFlag } from "@/lib/order-flags";
 import { CATEGORY_LABEL, formatNaira, fromDbCategory, type DbCategory } from "@/lib/pricing";
 import { ago } from "@/lib/zenom-mobile";
 
@@ -28,11 +29,8 @@ const dayKey = (d: Date) => d.toISOString().slice(0, 10);
 const DAY = 86_400_000;
 
 /** The picture to show for one ordered piece: the customer's reference photo on a commission, else the artwork's first image. */
-export function pieceImage(
-  item: { notes?: string | null; product: { images?: { url: string }[] } },
-  orderNotes?: string | null
-): string | null {
-  return parseCommissionNotes(item.notes, orderNotes).photoUrl ?? item.product.images?.[0]?.url ?? null;
+export function pieceImage(item: { referencePhotoUrl?: string | null; product: { images?: { url: string }[] } }): string | null {
+  return item.referencePhotoUrl ?? item.product.images?.[0]?.url ?? null;
 }
 
 /** "Portrait, 20×24 framed" (commission) or "Held Gaze, 16×20 framed"; "+ 1 more" for multi-piece orders. */
@@ -48,7 +46,7 @@ export async function getDashboard(range: RangeKey) {
   const since = range === "all" ? null : new Date(Date.now() - Number(range) * DAY);
   const where = since ? { createdAt: { gte: since } } : {};
 
-  const [orders, productCounts, customers] = await Promise.all([
+  const [orders, productCounts, customers, paidClaims] = await Promise.all([
     prisma.order.findMany({
       where,
       orderBy: { createdAt: "asc" },
@@ -71,6 +69,7 @@ export async function getDashboard(range: RangeKey) {
             sizeLabel: true,
             productId: true,
             notes: true,
+            referencePhotoUrl: true,
             product: {
               select: {
                 name: true,
@@ -87,6 +86,23 @@ export async function getDashboard(range: RangeKey) {
     // Commission placeholders are not catalogue pieces, so they never count as stock.
     prisma.product.groupBy({ by: ["category", "status"], where: NOT_COMMISSION, _count: { _all: true } }),
     prisma.user.count({ where: { role: "CUSTOMER" } }),
+    // "I've made the transfer" taps still waiting on Samuel (any date, not range-limited).
+    prisma.order.findMany({
+      where: { status: "AWAITING_DEPOSIT", customerPaidAt: { not: null } },
+      orderBy: { customerPaidAt: "desc" },
+      take: 10,
+      select: {
+        id: true,
+        orderNumber: true,
+        customerName: true,
+        deposit: true,
+        customerPaidAt: true,
+        items: {
+          take: 1,
+          select: { referencePhotoUrl: true, product: { select: { images: { orderBy: { order: "asc" }, take: 1, select: { url: true } } } } },
+        },
+      },
+    }),
   ]);
 
   const active = orders.filter((o) => o.status !== "CANCELLED");
@@ -148,7 +164,7 @@ export async function getDashboard(range: RangeKey) {
       };
       a.pieces += qty;
       a.revenue += rev;
-      a.image = a.image ?? pieceImage(it, o.notes);
+      a.image = a.image ?? pieceImage(it);
       artworks.set(it.productId, a);
       if (it.sizeLabel) sizes.set(it.sizeLabel, (sizes.get(it.sizeLabel) ?? 0) + qty);
       if (it.framed) framedCount += qty;
@@ -204,7 +220,16 @@ export async function getDashboard(range: RangeKey) {
     recent: [...orders]
       .reverse()
       .slice(0, 6)
-      .map((o) => ({ ...o, image: o.items[0] ? pieceImage(o.items[0], o.notes) : null })),
+      .map((o) => ({ ...o, image: o.items[0] ? pieceImage(o.items[0]) : null })),
+    /** Customers who say they've paid the deposit; Samuel checks his bank, then marks it received. */
+    saysPaid: paidClaims.map((o) => ({
+      id: o.id,
+      orderNumber: o.orderNumber,
+      customerName: o.customerName,
+      deposit: o.deposit,
+      at: o.customerPaidAt ?? new Date(),
+      image: o.items[0] ? pieceImage(o.items[0]) : null,
+    })),
   };
 }
 
@@ -250,12 +275,15 @@ const ALERT_SELECT = {
   deposit: true,
   createdAt: true,
   updatedAt: true,
-  notes: true,
+  customerPaidAt: true,
+  sketchApprovedAt: true,
+  sketchFeedbackAt: true,
+  photos: { where: { stage: "SKETCH" as const }, orderBy: { createdAt: "desc" as const }, take: 1, select: { createdAt: true } },
   items: {
     select: {
       framed: true,
       sizeLabel: true,
-      notes: true,
+      referencePhotoUrl: true,
       quantity: true,
       product: {
         select: {
@@ -278,6 +306,8 @@ export type StudioNewest = { id: string; title: string; body: string };
  *  - AWAITING_DEPOSIT, older 48h   → "Deposit due"
  *  - READY                         → "Order ready for delivery"
  *  - COMPLETED in the last 7 days  → "Payment completed"
+ *  - the customer's taps: "Customer says they've paid" (instead of "Deposit
+ *    due"), "Changes requested on the sketch", "Sketch approved" (CONFIRMED)
  * plus the PENDING count (Orders tab badge) and the newest orders (push banner).
  */
 export async function getStudioAlerts() {
@@ -291,6 +321,9 @@ export async function getStudioAlerts() {
           { status: "AWAITING_DEPOSIT", createdAt: { lte: new Date(now - 2 * DAY) } },
           { status: "READY" },
           { status: "COMPLETED", updatedAt: { gte: new Date(now - 7 * DAY) } },
+          { status: "AWAITING_DEPOSIT", customerPaidAt: { not: null } },
+          { status: { in: ["CONFIRMED", "IN_PRODUCTION"] }, sketchFeedbackAt: { not: null }, sketchApprovedAt: null },
+          { status: "CONFIRMED", sketchApprovedAt: { not: null } },
         ],
       },
       orderBy: { updatedAt: "desc" },
@@ -309,13 +342,29 @@ export async function getStudioAlerts() {
   const pieces = (o: (typeof newest)[number]) => o.items.reduce((a, it) => a + (it.quantity || 1), 0);
 
   const notices: StudioNotice[] = attention
-    .map((o): StudioNotice => {
-      const image = o.items[0] ? pieceImage(o.items[0], o.notes) : null;
+    .map((o): StudioNotice | null => {
+      const image = o.items[0] ? pieceImage(o.items[0]) : null;
       const base = { orderId: o.id, image };
+      // A customer tap outranks the status notice. Keys carry the tap time, so a new tap is unread again.
+      const flag = attentionFlag(o, o.photos[0]?.createdAt);
+      if (flag === "says-paid" && o.customerPaidAt) {
+        const at = o.customerPaidAt.getTime();
+        return { ...base, key: `says-paid:${o.id}:${at}`, title: "Customer says they've paid", body: `${o.orderNumber} · ${o.customerName} · ${formatNaira(o.deposit)}`, when: ago(at, now), at };
+      }
+      if (flag === "changes-asked" && o.sketchFeedbackAt) {
+        const at = o.sketchFeedbackAt.getTime();
+        return { ...base, key: `changes:${o.id}:${at}`, title: "Changes requested on the sketch", body: `${o.orderNumber} · ${o.customerName}`, when: ago(at, now), at };
+      }
+      if (flag === "sketch-approved" && o.sketchApprovedAt) {
+        const at = o.sketchApprovedAt.getTime();
+        return { ...base, key: `approved:${o.id}:${at}`, title: "Sketch approved", body: `${o.orderNumber} · ${o.customerName} · ready for production`, when: ago(at, now), at };
+      }
       switch (o.status) {
         case "PENDING":
           return { ...base, key: `new:${o.id}`, title: isCommission(o) ? "New commission request" : "New order", body: `${o.orderNumber} · ${o.customerName} · ${orderSpec(o.items)}`, when: ago(o.createdAt, now), at: o.createdAt.getTime() };
         case "AWAITING_DEPOSIT": {
+          // Only deposits over 48 hours old are due (the query's rule, checked again here).
+          if (o.createdAt.getTime() > now - 2 * DAY) return null;
           const due = o.createdAt.getTime() + 2 * DAY;
           return { ...base, key: `deposit:${o.id}`, title: "Deposit due", body: `${o.orderNumber} · ${o.customerName} · ${formatNaira(o.deposit)}`, when: ago(due, now), at: due };
         }
@@ -323,10 +372,14 @@ export async function getStudioAlerts() {
           const n = pieces(o);
           return { ...base, key: `ready:${o.id}`, title: "Order ready for delivery", body: `${o.orderNumber} · ${o.customerName} · ${n} piece${n === 1 ? "" : "s"}`, when: ago(o.updatedAt, now), at: o.updatedAt.getTime() };
         }
-        default:
+        case "COMPLETED":
           return { ...base, key: `paid:${o.id}`, title: "Payment completed", body: `${o.orderNumber} · ${o.customerName}`, when: ago(o.updatedAt, now), at: o.updatedAt.getTime() };
+        default:
+          // Matched only by a sketch rule whose cue has passed (e.g. a new sketch went up since).
+          return null;
       }
     })
+    .filter((n): n is StudioNotice => n !== null)
     .sort((a, b) => b.at - a.at);
 
   return {

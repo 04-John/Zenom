@@ -8,7 +8,7 @@ import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { sendOrderEmails } from "@/lib/email";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { fromDbCategory, isPortrait, orderTotals, sizeLabel, toDbCategory, unitPriceFor, type PricedItem } from "@/lib/pricing";
-import { buildItemNotes, buildOrderNotes, commissionProductName, commissionSlug } from "@/lib/commission";
+import { MEDIUM_TO_DB, commissionProductName, commissionSlug } from "@/lib/commission";
 
 // Order creation, in the required sequence:
 // 1. validate  2. save to Postgres  3. attempt email (failure non-fatal)
@@ -195,7 +195,9 @@ async function createCommission(data: CommissionInput, userId: string | undefine
     const totals = orderTotals([pricedItem], data.delivery);
     const email = data.customerEmail?.trim() ?? "";
     const address = data.deliveryAddress?.trim() || "To confirm on WhatsApp";
-    const notes = buildOrderNotes({ neededBy: data.neededBy, notes: data.notes });
+    const notes = data.notes?.trim() || undefined;
+    // WhatsApp message: the "needed by" date travels with the notes.
+    const whatsappNotes = [data.neededBy && `Needed by: ${data.neededBy}`, notes].filter(Boolean).join("\n") || undefined;
 
     const order = await createWithOrderNumber((orderNumber) =>
       prisma.order.create({
@@ -208,6 +210,7 @@ async function createCommission(data: CommissionInput, userId: string | undefine
           customerPhone: data.customerPhone,
           deliveryAddress: address,
           notes,
+          neededBy: data.neededBy ? new Date(`${data.neededBy}T00:00:00.000Z`) : null,
           delivery: data.delivery === "kaduna" ? "KADUNA" : "OUTSIDE",
           deliveryFee: totals.delivery,
           subtotal: totals.subtotal,
@@ -221,7 +224,8 @@ async function createCommission(data: CommissionInput, userId: string | undefine
                 sizeIndex: data.sizeIndex,
                 framed: data.framed,
                 subjectCount,
-                notes: buildItemNotes({ medium: data.medium, photoUrl: data.photoUrl }),
+                medium: MEDIUM_TO_DB[data.medium],
+                referencePhotoUrl: data.photoUrl ?? null,
                 unitPrice,
                 quantity: 1,
                 subtotal: unitPrice,
@@ -259,7 +263,7 @@ async function createCommission(data: CommissionInput, userId: string | undefine
       deliveryAddress: address,
       delivery: data.delivery,
       total: totals.total,
-      notes,
+      notes: [whatsappNotes, data.photoUrl && `Reference photo: ${data.photoUrl}`].filter(Boolean).join("\n") || undefined,
       items: [
         {
           title: `${commissionProductName(category)} (${data.medium})`,

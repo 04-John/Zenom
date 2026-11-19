@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Cta, Icon, copyText, useLightToast } from "@/components/mobile/ui";
-import { QUOTE_TURNAROUND } from "@/lib/zenom-mobile";
+import { useStudioInfo } from "@/components/StudioInfoProvider";
 import { useReducedMotion } from "../hooks";
 
 export type CommissionResult = { id: string; orderNumber: string; whatsappUrl: string; total: number; deposit: number };
@@ -42,11 +42,12 @@ export function CommissionDone({
 }) {
   const { say } = useLightToast();
   const reduced = useReducedMotion();
+  const { quoteTurnaround } = useStudioInfo();
 
   const timeline: [string, string, string, 0 | 1 | 2][] = [
     ["Received", "Your request is in", "Now", 2],
     ["Reviewing", "Samuel looks at your photo and size", "Next", 1],
-    ["Quote sent", signedIn ? "On WhatsApp and in your orders" : "On WhatsApp", cap(QUOTE_TURNAROUND), 0],
+    ["Quote sent", signedIn ? "On WhatsApp and in your orders" : "On WhatsApp", cap(quoteTurnaround), 0],
     ["Deposit & drawing", "After you accept", "", 0],
     ["Delivered", framed ? "Framed, to your door" : "To your door", "", 0],
   ];

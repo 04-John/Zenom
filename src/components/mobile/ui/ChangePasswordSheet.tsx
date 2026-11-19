@@ -1,14 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { Sheet } from "./Sheet";
 import { Cta } from "./controls";
 import { useLightToast } from "./LightToast";
 
 // "Change password" sheet (customer Settings and the studio tab). Needs the
-// current password; POSTs to /api/account/password.
+// current password; POSTs to /api/account/password, which signs out every
+// session (other phones and computers included). This device then signs
+// straight back in with the new password, so only the others are signed out.
 export function ChangePasswordSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { say } = useLightToast();
+  const router = useRouter();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [repeat, setRepeat] = useState("");
@@ -41,13 +46,17 @@ export function ChangePasswordSheet({ open, onClose }: { open: boolean; onClose:
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ currentPassword: current, newPassword: next }),
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? "Couldn't change your password. Try again.");
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? "Couldn't change your password. Try again.");
+      const again = await signIn("credentials", { email: body.email, password: next, redirect: false });
+      if (!again?.ok) {
+        window.location.href = "/login";
+        return;
       }
       reset();
       onClose();
-      say("Password changed");
+      say("Password changed · other devices signed out");
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't change your password. Try again.");
     } finally {

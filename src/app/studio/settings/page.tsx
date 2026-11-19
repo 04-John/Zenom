@@ -11,23 +11,39 @@ import {
   SIZES,
   formatNaira,
 } from "@/lib/pricing";
+import { DEFAULT_DRAWING_DAYS, DEFAULT_QUOTE_HOURS } from "@/lib/studio-info";
+import { getStudioSettingsRow } from "@/lib/studio-settings";
 import { SettingsMobile } from "@/components/mobile/studio/SettingsMobile";
+import type { StudioSettingsValues } from "@/components/mobile/studio/useStudioSettings";
+import { StudioSettingsForm } from "./StudioSettingsForm";
 
 export const metadata = { title: "Studio | Zenom Studio" };
+export const dynamic = "force-dynamic";
 
-// The light app's "Studio" tab. Desktop gets a small page in the dark studio
-// style (profile + price list); the admin check lives in ../layout.tsx.
+// The light app's "Studio" tab. Desktop gets a page in the dark studio style
+// (profile, payments & timings, price list); the admin check lives in
+// ../layout.tsx.
 export default async function StudioSettingsPage() {
   const session = await getServerSession(authOptions);
   const name = session?.user?.name?.trim() || "Samuel";
   const email = session?.user?.email ?? "";
 
+  // Bank details and timings (null = never saved: the defaults apply).
+  const row = await getStudioSettingsRow();
+  const settings: StudioSettingsValues = {
+    bankName: row?.bankName ?? "",
+    bankAccountName: row?.bankAccountName ?? "",
+    bankAccountNumber: row?.bankAccountNumber ?? "",
+    quoteHours: String(row?.quoteHours ?? DEFAULT_QUOTE_HOURS),
+    drawingDays: String(row?.drawingDays ?? DEFAULT_DRAWING_DAYS),
+  };
+
   return (
     <>
-      <SettingsMobile name={name} email={email} />
+      <SettingsMobile name={name} email={email} settings={settings} />
       <div className="max-w-2xl pb-24 pt-8 max-[900px]:hidden">
         <p className="kicker">Admin</p>
-        <h1 className="h-section mt-3">Studio</h1>
+        <h1 className="h-section mt-3">Settings</h1>
         <p className="mt-4 text-sm text-ink-2">
           Signed in as {name}
           {email ? ` · ${email}` : ""} ·{" "}
@@ -35,6 +51,11 @@ export default async function StudioSettingsPage() {
             View the live site
           </Link>
         </p>
+
+        <section className="mt-8 rounded-card border border-ink/10 bg-night-raised p-6">
+          <h2 className="label-mono">Payments &amp; timings</h2>
+          <StudioSettingsForm initial={settings} />
+        </section>
 
         <section className="mt-8 rounded-card border border-ink/10 bg-night-raised p-6">
           <h2 className="label-mono">Price list</h2>

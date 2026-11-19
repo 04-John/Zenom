@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { HeaderButton, Icon, LightPage, ListCard, SearchField, Sheet } from "@/components/mobile/ui";
+import type { AttentionFlag } from "@/lib/order-flags";
 import { ORDER_CHIP, ORDER_LABEL, ORDER_STATUSES, type OrderStatus } from "@/lib/zenom-mobile";
 import { ORDERS_BACK_KEY, remember } from "./shared";
-import { OrderStatusChip } from "./StatusChip";
+import { AttentionChip, OrderStatusChip } from "./StatusChip";
 import { StudioHeader } from "./StudioHeader";
 import { useStudio } from "./StudioMobileProvider";
 import { Thumb } from "./Thumb";
@@ -22,6 +23,8 @@ export type OrderRow = {
   pieces: number;
   kaduna: boolean;
   image: string | null;
+  /** the customer tapped something Samuel still has to act on */
+  flag: AttentionFlag | null;
 };
 
 /** A 44px hit area around a 30px .pill tag. */
@@ -140,6 +143,11 @@ export function OrdersMobile({
                     <span style={{ fontSize: 12, color: "#4A433B" }}>
                       {o.age} · {o.pieces} {o.pieces === 1 ? "piece" : "pieces"} · {o.kaduna ? "Kaduna" : "Outside"}
                     </span>
+                    {o.flag && (
+                      <span style={{ display: "flex", marginTop: 2 }}>
+                        <AttentionChip flag={o.flag} />
+                      </span>
+                    )}
                   </span>
                   <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flex: "none" }}>
                     <strong style={{ fontSize: 13 }}>{o.total}</strong>

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendOrderStatusEmail, type StatusEmailInput } from "@/lib/email";
 import { ORDER_FLOW, type OrderStatus } from "@/lib/zenom-mobile";
+import { getStudioInfo } from "@/lib/studio-settings";
 import { z } from "zod";
 
 const patchSchema = z.object({
@@ -31,17 +32,20 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: "Invalid status." }, { status: 400 });
   }
 
-  const before = await prisma.order.findUnique({ where: { id: params.id }, select: { status: true } });
+  const before = await prisma.order.findUnique({ where: { id: params.id }, select: { status: true, deliveredAt: true } });
   if (!before) return NextResponse.json({ error: "Order not found." }, { status: 404 });
 
+  // The delivery date (certificate) is stamped when the order is marked
+  // COMPLETED and cleared if it's moved back, e.g. after a mis-click.
+  const to = parsed.data.status;
+  const deliveredAt = to === "COMPLETED" ? before.deliveredAt ?? new Date() : null;
   const order = await prisma.order.update({
     where: { id: params.id },
-    data: { status: parsed.data.status },
+    data: { status: to, deliveredAt },
   });
 
   // Email failures never undo the status change (same rule as new orders).
   let emailed = false;
-  const to = parsed.data.status;
   if (order.customerEmail.trim() && shouldEmail(before.status, to)) {
     const result = await sendOrderStatusEmail({
       orderNumber: order.orderNumber,
@@ -53,6 +57,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       deposit: order.deposit,
       outsideKaduna: order.delivery === "OUTSIDE",
       hasAccount: !!order.userId,
+      bank: to === "AWAITING_DEPOSIT" ? (await getStudioInfo()).bank : null,
     }).catch((err) => {
       console.error("Status email failed:", err);
       return { sent: false };

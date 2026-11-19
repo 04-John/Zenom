@@ -9,18 +9,24 @@ import { clientIp, rateLimit } from "@/lib/rate-limit";
 // to pass through a Netlify function (which has a request body size
 // limit) and the API secret never reaches the client.
 //
-// Two purposes:
+// Three purposes:
 //  - default (no body): admin artwork images, admin only.
+//  - { purpose: "progress" }: sketch / shading / finished photos Samuel
+//    shares on an order (POST /api/orders/[id]/photos), admin only.
 //  - { purpose: "commission" }: a customer's reference photo for a
 //    commission request (/commission). Open to guests, so it is rate
 //    limited per IP, signed for its own folder and restricted to images.
 const UPLOAD_FOLDER = "zenom-studio/products";
+const PROGRESS_FOLDER = "zenom-studio/progress";
+// Formats every browser can show (no HEIC: it only displays in Safari).
+const PROGRESS_FORMATS = "jpg,jpeg,png,webp";
 const COMMISSION_FOLDER = "zenom-studio/commissions";
 const COMMISSION_FORMATS = "jpg,jpeg,png,webp,heic";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const commission = body?.purpose === "commission";
+  const progress = body?.purpose === "progress";
 
   if (commission) {
     const { allowed } = rateLimit(`upload:${clientIp(req)}`, 8, 10 * 60 * 1000);
@@ -41,7 +47,9 @@ export async function POST(req: NextRequest) {
   const timestamp = Math.floor(Date.now() / 1000);
   const params: Record<string, string | number> = commission
     ? { timestamp, folder: COMMISSION_FOLDER, allowed_formats: COMMISSION_FORMATS }
-    : { timestamp, folder: UPLOAD_FOLDER };
+    : progress
+      ? { timestamp, folder: PROGRESS_FOLDER, allowed_formats: PROGRESS_FORMATS }
+      : { timestamp, folder: UPLOAD_FOLDER };
   const signature = cloudinary.utils.api_sign_request(params, process.env.CLOUDINARY_API_SECRET);
 
   // Every signed param must be sent back to Cloudinary with the file.
@@ -52,5 +60,6 @@ export async function POST(req: NextRequest) {
     cloudName: process.env.CLOUDINARY_CLOUD_NAME,
     folder: params.folder,
     ...(commission && { allowedFormats: COMMISSION_FORMATS }),
+    ...(progress && { allowedFormats: PROGRESS_FORMATS }),
   });
 }

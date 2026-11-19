@@ -22,6 +22,7 @@ export function ProductForm({ initial, suggestedCodes }: { initial?: any; sugges
     status: initial?.status ?? "AVAILABLE",
     archiveCode: initial?.archiveCode ?? suggestedCodes?.PORTRAIT ?? "",
     imageUrl: initial?.images?.[0]?.url ?? "",
+    featured: !!initial?.featured,
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -163,6 +164,23 @@ export function ProductForm({ initial, suggestedCodes }: { initial?: any; sugges
           <option value="SOLD_OUT">Sold Out</option>
           <option value="COMING_SOON">Coming Soon</option>
         </select>
+      </label>
+
+      <label className="flex items-start gap-3">
+        <input
+          type="checkbox"
+          checked={form.featured}
+          onChange={(e) => setForm({ ...form, featured: e.target.checked })}
+          className="mt-0.5 h-5 w-5 flex-none accent-ember"
+        />
+        <span>
+          <span className="block text-sm text-ink">Show on home page</span>
+          <span className="mt-1 block text-xs text-ink-3">
+            {form.featured && form.status === "DRAFT"
+              ? "Drafts stay hidden. Pick another status to show it."
+              : "Adds it to the slideshow at the top of the home page on phones."}
+          </span>
+        </span>
       </label>
 
       {error && <p className="text-sm text-ember">{error}</p>}

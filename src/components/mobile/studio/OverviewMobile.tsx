@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Icon, LightPage } from "@/components/mobile/ui";
 import { CATEGORY_LABEL, formatNaira, fromDbCategory, type DbCategory } from "@/lib/pricing";
 import { CATEGORIES, type RangeKey, type getDashboard } from "@/lib/studio-stats";
-import { ORDER_STATUSES, kfmt } from "@/lib/zenom-mobile";
+import { ORDER_STATUSES, ago, kfmt } from "@/lib/zenom-mobile";
 import { RangeControl } from "./RangeControl";
 import { StudioHeader } from "./StudioHeader";
 import { OrderStatusChip } from "./StatusChip";
@@ -35,6 +35,7 @@ export function OverviewMobile({ d, range }: { d: Dashboard; range: RangeKey }) 
   const cmax = Math.max(1, ...CATEGORIES.map((c) => d.byCategory[c].revenue));
   const best = d.topArtworks.slice(0, 3);
   const latest = d.recent.slice(0, 3);
+  const now = Date.now();
 
   return (
     <LightPage desktop="hide" tabBar>
@@ -44,6 +45,32 @@ export function OverviewMobile({ d, range }: { d: Dashboard; range: RangeKey }) 
           <span style={{ fontSize: 13, color: "#4A433B" }}>{range === "all" ? "All time" : `Last ${range} days`}</span>
           <RangeControl value={range} />
         </div>
+
+        {/* Customers who tapped "I've made the transfer": check the bank, then confirm */}
+        {d.saysPaid.length > 0 && (
+          <section className="card" aria-labelledby="ov-paid" style={{ borderColor: "#E58A52", boxShadow: "0 0 0 3px rgba(229,138,82,.16)" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <h2 id="ov-paid" className="kick" style={{ ...kick, margin: 0, fontWeight: 500, color: "#9A4A1F" }}>
+                {d.saysPaid.length === 1 ? "Says they've paid" : `${d.saysPaid.length} say they've paid`}
+              </h2>
+              <span style={{ fontSize: 13, color: "#4A433B" }}>Check your bank, then mark the deposit received.</span>
+            </div>
+            <div style={{ margin: "0 -16px" }}>
+              {d.saysPaid.map((o) => (
+                <Link key={o.id} href={`/studio/orders/${o.id}?from=overview`} className="mrow">
+                  <Thumb src={o.image} w={36} h={45} />
+                  <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+                    <strong style={{ fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.customerName}</strong>
+                    <span style={{ fontSize: 11, color: "#4A433B" }}>
+                      {o.orderNumber} · {formatNaira(o.deposit)} · {ago(o.at, now)}
+                    </span>
+                  </span>
+                  <Icon name="chevronRight" size={14} stroke={2} style={{ color: "#857C71" }} />
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* 8 KPI cards */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>

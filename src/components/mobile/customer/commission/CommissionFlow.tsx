@@ -17,7 +17,7 @@ import {
   unitPriceFor,
   type Category,
 } from "@/lib/pricing";
-import { QUOTE_TURNAROUND } from "@/lib/zenom-mobile";
+import { useStudioInfo } from "@/components/StudioInfoProvider";
 import { uploadImage } from "@/lib/upload-image";
 import { Cta, Icon, SpinArc, Stepper, useLightToast, useSavedFlash, useShake } from "@/components/mobile/ui";
 import { ROOM_KEYS, displayPhoto } from "../model";
@@ -102,6 +102,7 @@ export function CommissionFlow({ rooms, prefill, start, signedIn }: { rooms: Roo
   const { say } = useLightToast();
   const { lenis } = useLenis();
   const reduced = useReducedMotion();
+  const { quoteTurnaround } = useStudioInfo();
 
   const [screen, setScreen] = useState<Screen>(start ? "form" : "intro");
   const [step, setStep] = useState(1);
@@ -606,7 +607,7 @@ export function CommissionFlow({ rooms, prefill, start, signedIn }: { rooms: Roo
                 <div style={{ display: "flex", gap: 10, padding: 14, borderRadius: 16, background: "#FBEBDD", color: "#4A2410", fontSize: 14, lineHeight: 1.5 }}>
                   <Icon d={["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z", "M12 8v5", "M12 16h.01"]} size={18} stroke={2} style={{ color: "#9A4A1F", flex: "none", marginTop: 2 }} />
                   <span>
-                    Samuel confirms the final price on WhatsApp <strong>{QUOTE_TURNAROUND}</strong>. A 50% non-refundable deposit starts the work. Nothing is charged until you accept.
+                    Samuel confirms the final price on WhatsApp <strong>{quoteTurnaround}</strong>. A 50% non-refundable deposit starts the work. Nothing is charged until you accept.
                   </span>
                 </div>
               </>

@@ -3,20 +3,23 @@
 import Image from "next/image";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
-import { ChangePasswordSheet, Icon, LightPage, SwitchRow } from "@/components/mobile/ui";
+import { ChangePasswordSheet, Cta, Icon, LightPage, SwitchRow, useLightToast } from "@/components/mobile/ui";
 import { art } from "@/lib/catalog";
 import { DELIVERY_KADUNA, DEPOSIT_RATE, PRICE_PER_ADDITIONAL_SUBJECT, formatNaira } from "@/lib/pricing";
 import { PRICE_ABSTRACT, PRICE_FRAME, PRICE_PORTRAIT, SIZE_LABELS, initials, kfmt } from "@/lib/zenom-mobile";
 import { ConfirmSheet } from "./ConfirmSheet";
 import { StudioHeader } from "./StudioHeader";
 import { useStudio } from "./StudioMobileProvider";
+import { useStudioSettings, type StudioSettingsField, type StudioSettingsValues } from "./useStudioSettings";
 
 const cell: React.CSSProperties = { padding: "9px 6px 9px 0", textAlign: "left", verticalAlign: "top" };
 const head: React.CSSProperties = { ...cell, padding: "12px 6px 6px 0", fontSize: 11, fontWeight: 700, color: "#4A433B" };
 
-// Studio tab of the light studio app: profile, live site, price list (read
-// from pricing.ts), alert switches (stored in this browser) and sign out.
-export function SettingsMobile({ name, email }: { name: string; email: string }) {
+// Studio tab of the light studio app: profile, live site, payments & timings
+// (bank details, quote and drawing times; PUT /api/studio/settings), price
+// list (read from pricing.ts), alert switches (stored in this browser) and
+// sign out.
+export function SettingsMobile({ name, email, settings }: { name: string; email: string; settings: StudioSettingsValues }) {
   const { prefs, setPref } = useStudio();
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
@@ -45,6 +48,8 @@ export function SettingsMobile({ name, email }: { name: string; email: string })
           View the live site
           <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>(opens in a new tab)</span>
         </a>
+
+        <PaymentsForm initial={settings} />
 
         <div className="grp">
           <h2 className="gh">Price list</h2>
@@ -127,5 +132,71 @@ export function SettingsMobile({ name, email }: { name: string; email: string })
         }}
       />
     </LightPage>
+  );
+}
+
+/** "Payments & timings": what customers see on their order, in the quote email and on the commission page. */
+function PaymentsForm({ initial }: { initial: StudioSettingsValues }) {
+  const { say } = useLightToast();
+  const f = useStudioSettings(initial);
+  const field = (k: StudioSettingsField, label: string, extra: React.InputHTMLAttributes<HTMLInputElement> = {}) => {
+    const err = f.fieldErrors[k];
+    return (
+      <label className="lbl" style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+        {label}
+        <input
+          className={"field" + (err ? " err-a" : "")}
+          type="text"
+          autoComplete="off"
+          value={f.values[k]}
+          onChange={(e) => f.set(k, e.target.value)}
+          disabled={f.saving}
+          aria-invalid={!!err}
+          aria-describedby={err ? `st-${k}-err` : undefined}
+          {...extra}
+        />
+        {err && (
+          <span id={`st-${k}-err`} className="errmsg" role="alert" style={{ fontWeight: 400 }}>
+            {err}
+          </span>
+        )}
+      </label>
+    );
+  };
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (await f.save()) say("Payments & timings saved");
+  }
+
+  return (
+    <form className="grp" onSubmit={submit} noValidate aria-labelledby="st-pay">
+      <h2 id="st-pay" className="gh">
+        Payments &amp; timings
+      </h2>
+      <div className="gl" style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
+        {field("bankName", "Bank name", { maxLength: 80, placeholder: "e.g. GTBank" })}
+        {field("bankAccountName", "Account name", { maxLength: 120 })}
+        {field("bankAccountNumber", "Account number", { inputMode: "numeric", maxLength: 24 })}
+        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: f.bankFilled > 0 && f.bankFilled < 3 ? "#9A4A1F" : "#4A433B" }}>
+          {f.bankFilled === 3
+            ? "Customers see these on their order and in the quote email."
+            : "Customers see the bank details on their order and in the quote email once all three are filled."}
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, alignItems: "start", borderTop: "1px solid #EFEAE2", paddingTop: 14 }}>
+          {field("quoteHours", "Quote time (hours)", { inputMode: "numeric", maxLength: 3 })}
+          {field("drawingDays", "Drawing time (days)", { inputMode: "numeric", maxLength: 3 })}
+        </div>
+        {f.preview && <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: "#4A433B" }}>Customers read: {f.preview}.</p>}
+      </div>
+      {f.error && (
+        <p className="errmsg" role="alert" style={{ margin: 0, padding: "0 4px" }}>
+          {f.error}
+        </p>
+      )}
+      <Cta type="submit" loading={f.saving} disabled={!f.dirty} style={{ height: 52, fontSize: 15, opacity: f.dirty || f.saving ? 1 : 0.45 }}>
+        Save changes
+      </Cta>
+    </form>
   );
 }

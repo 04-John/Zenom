@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Fragment } from "react";
 import { formatNaira, CATEGORY_LABEL, type Category } from "@/lib/pricing";
 import { CATEGORIES, RANGES, getDashboard, parseRange } from "@/lib/studio-stats";
 import { linkPrimary, linkSecondary } from "./buttonStyles";
@@ -21,6 +22,7 @@ export default async function StudioDashboard({ searchParams }: { searchParams: 
   const inProduction = d.statusCounts.IN_PRODUCTION ?? 0;
   const maxCat = Math.max(1, ...CATEGORIES.map((c) => d.byCategory[c].revenue));
   const maxArt = Math.max(1, ...d.topArtworks.map((a) => a.pieces));
+  const saysPaid = d.saysPaid;
 
   return (
     <>
@@ -48,8 +50,24 @@ export default async function StudioDashboard({ searchParams }: { searchParams: 
       </div>
 
       {/* Needs attention */}
-      {(empty.length > 0 || awaiting + pending > 0) && (
+      {(empty.length > 0 || awaiting + pending > 0 || saysPaid.length > 0) && (
         <div className="mt-8 space-y-3">
+          {saysPaid.length > 0 && (
+            <Alert tone="ember">
+              <strong>{saysPaid.length === 1 ? "A customer says they've paid." : `${saysPaid.length} customers say they've paid.`}</strong> Check your bank,
+              then mark the deposit received:{" "}
+              {saysPaid.map((o, i) => (
+                <Fragment key={o.id}>
+                  {i > 0 && "; "}
+                  <Link href={`/studio/orders/${o.id}`} className="underline">
+                    {o.orderNumber}
+                  </Link>{" "}
+                  ({o.customerName}, {formatNaira(o.deposit)})
+                </Fragment>
+              ))}
+              .
+            </Alert>
+          )}
           {empty.length > 0 && (
             <Alert tone="ember">
               <strong>Nothing left to sell in {empty.map(catLabel).join(", ")}.</strong> Every piece there is sold out,

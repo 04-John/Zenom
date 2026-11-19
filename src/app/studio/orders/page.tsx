@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatNaira } from "@/lib/pricing";
+import { ATTENTION_CLASS, ATTENTION_LABEL, attentionFlag } from "@/lib/order-flags";
 import { pieceImage } from "@/lib/studio-stats";
 import { ago } from "@/lib/zenom-mobile";
 import { OrdersMobile, type OrderRow } from "@/components/mobile/studio/OrdersMobile";
@@ -11,6 +12,14 @@ export const dynamic = "force-dynamic";
 const STATUSES = ["AWAITING_DEPOSIT", "PENDING", "CONFIRMED", "IN_PRODUCTION", "READY", "COMPLETED", "CANCELLED"] as const;
 const PAGE_SIZE = 25;
 const MOBILE_LIMIT = 200; // the light app loads the latest orders and filters them on the phone
+
+// The customer's taps, for the "Says paid" / "Changes asked" / "Sketch approved" chips.
+const FLAG_SELECT = {
+  customerPaidAt: true,
+  sketchApprovedAt: true,
+  sketchFeedbackAt: true,
+  photos: { where: { stage: "SKETCH" as const }, orderBy: { createdAt: "desc" as const }, take: 1, select: { createdAt: true } },
+};
 
 export default async function StudioOrdersPage({
   searchParams,
@@ -39,7 +48,7 @@ export default async function StudioOrdersPage({
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
-      include: { _count: { select: { items: true } } },
+      include: { _count: { select: { items: true } }, photos: FLAG_SELECT.photos },
     }),
     prisma.order.count({ where }),
     prisma.order.groupBy({ by: ["status"], _count: { _all: true } }),
@@ -56,10 +65,13 @@ export default async function StudioOrdersPage({
         total: true,
         delivery: true,
         createdAt: true,
-        notes: true,
+        customerPaidAt: FLAG_SELECT.customerPaidAt,
+        sketchApprovedAt: FLAG_SELECT.sketchApprovedAt,
+        sketchFeedbackAt: FLAG_SELECT.sketchFeedbackAt,
+        photos: FLAG_SELECT.photos,
         items: {
           select: {
-            notes: true,
+            referencePhotoUrl: true,
             quantity: true,
             product: { select: { images: { orderBy: { order: "asc" }, take: 1, select: { url: true } } } },
           },
@@ -83,7 +95,8 @@ export default async function StudioOrdersPage({
     age: ago(o.createdAt, now),
     pieces: o.items.reduce((a, it) => a + (it.quantity || 1), 0),
     kaduna: o.delivery === "KADUNA",
-    image: o.items[0] ? pieceImage(o.items[0], o.notes) : null,
+    image: o.items[0] ? pieceImage(o.items[0]) : null,
+    flag: attentionFlag(o, o.photos[0]?.createdAt),
   }));
 
   const href = (over: Record<string, string | undefined>) => {
@@ -156,6 +169,7 @@ export default async function StudioOrdersPage({
                 <td className="px-5 py-4 text-ink-2">{o._count.items}</td>
                 <td className="px-5 py-4">
                   <StatusBadge status={o.status} />
+                  <FlagBadge flag={attentionFlag(o, o.photos[0]?.createdAt)} />
                 </td>
                 <td className="px-5 py-4">{formatNaira(o.total)}</td>
                 <td className="px-5 py-4 text-ink-2">{formatNaira(o.deposit)}</td>
@@ -183,6 +197,16 @@ export default async function StudioOrdersPage({
       )}
     </div>
     </>
+  );
+}
+
+/** What the customer tapped and Samuel still has to act on (under the status). */
+function FlagBadge({ flag }: { flag: ReturnType<typeof attentionFlag> }) {
+  if (!flag) return null;
+  return (
+    <span className={`mt-1.5 block w-fit whitespace-nowrap rounded-pill border px-3 py-1 text-[11px] font-semibold ${ATTENTION_CLASS[flag]}`}>
+      {ATTENTION_LABEL[flag]}
+    </span>
   );
 }
 

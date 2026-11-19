@@ -53,15 +53,32 @@ enum DeliveryZone {
   OUTSIDE
 }
 
+// Commission requests (/commission): what the customer asked Samuel to draw with.
+enum Medium {
+  CHARCOAL
+  GRAPHITE
+  COLOUR_PENCIL
+}
+
+// Progress photos Samuel shares on an order, in drawing order.
+enum PhotoStage {
+  SKETCH
+  SHADING
+  FINISHED
+}
+
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  passwordHash  String?
-  role          Role      @default(CUSTOMER)
-  emailVerified DateTime?
-  createdAt     DateTime  @default(now())
-  orders        Order[]
+  id             String    @id @default(cuid())
+  name           String?
+  email          String    @unique
+  passwordHash   String?
+  role           Role      @default(CUSTOMER)
+  emailVerified  DateTime?
+  // Bumped on every password reset/change. Sessions carry the value they
+  // were signed in with; an older value is signed out (see src/lib/auth.ts).
+  sessionVersion Int       @default(0)
+  createdAt      DateTime  @default(now())
+  orders         Order[]
 
   @@index([email])
 }
@@ -87,7 +104,9 @@ model Product {
   // No per-product price: every piece is priced from src/lib/pricing.ts
   // (category table x size + optional framing).
   status      ProductStatus   @default(DRAFT)
-  archiveCode String?         // Zenom Archive numbering, e.g. "ZS-001"
+  archiveCode String? // Zenom Archive numbering, e.g. "ZS-001"
+  // "Show on home page": adds the piece to the home hero slideshow.
+  featured    Boolean         @default(false)
   images      ProductImage[]
   orderItems  OrderItem[]
   createdAt   DateTime        @default(now())
@@ -95,6 +114,7 @@ model Product {
 
   @@index([pillar, status])
   @@index([category, status])
+  @@index([featured])
 }
 
 model ProductImage {
@@ -113,7 +133,7 @@ model ProductImage {
 // index directly; sizeId is kept only so pre-redesign orders stay linked.
 model PortraitSize {
   id         String      @id @default(cuid())
-  label      String      // "8×12" ... "24×36"
+  label      String // "8×12" ... "24×36"
   widthIn    Int
   heightIn   Int
   sortOrder  Int         @default(0)
@@ -121,52 +141,95 @@ model PortraitSize {
 }
 
 model Order {
-  id              String       @id @default(cuid())
-  orderNumber     String       @unique // "ZS-0001"
-  userId          String?
-  user            User?        @relation(fields: [userId], references: [id])
-  status          OrderStatus  @default(PENDING)
-  customerName    String
-  customerEmail   String
-  customerPhone   String
-  deliveryAddress String
-  notes           String?
+  id               String       @id @default(cuid())
+  orderNumber      String       @unique // "ZS-0001"
+  userId           String?
+  user             User?        @relation(fields: [userId], references: [id])
+  status           OrderStatus  @default(PENDING)
+  customerName     String
+  customerEmail    String
+  customerPhone    String
+  deliveryAddress  String
+  notes            String?
   // All money in kobo, recomputed server-side from src/lib/pricing.ts.
-  delivery        DeliveryZone @default(KADUNA)
-  deliveryFee     Int          @default(0)
-  subtotal        Int          @default(0)
-  total           Int
-  deposit         Int          @default(0) // 50% non-refundable
-  items           OrderItem[]
-  emailSent       Boolean      @default(false)
-  whatsappOpened  Boolean      @default(false)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  delivery         DeliveryZone @default(KADUNA)
+  deliveryFee      Int          @default(0)
+  subtotal         Int          @default(0)
+  total            Int
+  deposit          Int          @default(0) // 50% non-refundable
+  items            OrderItem[]
+  photos           OrderPhoto[]
+  emailSent        Boolean      @default(false)
+  whatsappOpened   Boolean      @default(false)
+  // Commission requests: the date the customer needs the piece by (date only).
+  neededBy         DateTime?    @db.Date
+  // Taps in the customer's app. They are flags for Samuel, never a status
+  // change: only Samuel moves an order forward (e.g. after checking his bank).
+  quoteAcceptedAt  DateTime?
+  customerPaidAt   DateTime? // "I've made the transfer"
+  sketchApprovedAt DateTime?
+  sketchFeedback   String? // "Ask for changes" text, latest request only
+  sketchFeedbackAt DateTime?
+  // Set when the order is marked COMPLETED (delivered and paid); shown on the
+  // certificate. Cleared if the order is moved back.
+  deliveredAt      DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 
   @@index([userId])
   @@index([status])
 }
 
+// Sketch / shading / finished photos Samuel uploads on an order (Cloudinary
+// URLs). The customer sees them on their order and approves the sketch.
+model OrderPhoto {
+  id        String     @id @default(cuid())
+  orderId   String
+  order     Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  stage     PhotoStage
+  url       String
+  createdAt DateTime   @default(now())
+
+  @@index([orderId, stage])
+}
+
+// Studio-wide details Samuel edits in the Studio tab. One row (id "studio");
+// read through src/lib/studio-settings.ts, which supplies defaults when the
+// row doesn't exist yet.
+model StudioSettings {
+  id                String   @id @default("studio")
+  bankName          String?
+  bankAccountName   String?
+  bankAccountNumber String?
+  quoteHours        Int      @default(24) // "Samuel sends your quote within 24 hours"
+  drawingDays       Int      @default(10) // "Ready in about 10 days" once drawing starts
+  updatedAt         DateTime @updatedAt
+}
+
 model OrderItem {
-  id           String        @id @default(cuid())
-  orderId      String
-  order        Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId    String
-  product      Product       @relation(fields: [productId], references: [id])
+  id                String        @id @default(cuid())
+  orderId           String
+  order             Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId         String
+  product           Product       @relation(fields: [productId], references: [id])
   // Legacy link (pre-redesign orders only); new items leave this null.
-  sizeId       String?
-  size         PortraitSize? @relation(fields: [sizeId], references: [id])
-  sizeLabel    String?       // e.g. "16×20" (legacy rows: "16x20")
-  sizeIndex    Int?          // 0-5 into SIZES; null for legacy sizes with no equivalent
-  framed       Boolean       @default(false)
+  sizeId            String?
+  size              PortraitSize? @relation(fields: [sizeId], references: [id])
+  sizeLabel         String? // e.g. "16×20" (legacy rows: "16x20")
+  sizeIndex         Int? // 0-5 into SIZES; null for legacy sizes with no equivalent
+  framed            Boolean       @default(false)
   // Extra people on a portrait: +10,000 each after the first.
-  subjectCount Int           @default(1)
-  notes        String?
+  subjectCount      Int           @default(1)
+  notes             String?
+  // Commission requests only (the item points at a hidden per-category
+  // "commission-<category>" product; see src/lib/commission.ts).
+  medium            Medium?
+  referencePhotoUrl String?
   // Per-item price snapshot in kobo (artwork + framing + extra subjects).
-  unitPrice    Int           @default(0)
+  unitPrice         Int           @default(0)
   // Legacy columns, kept so old orders stay readable. New orders: quantity 1, subtotal = unitPrice.
-  quantity     Int           @default(1)
-  subtotal     Int           @default(0)
+  quantity          Int           @default(1)
+  subtotal          Int           @default(0)
 
   @@index([orderId])
 }

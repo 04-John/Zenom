@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { productSchema } from "@/lib/validation";
 import { fromDbCategory, pillarFor } from "@/lib/pricing";
@@ -55,6 +56,7 @@ export async function POST(req: NextRequest) {
         ...(imageUrl && { images: { create: [{ url: imageUrl, alt: productData.name, order: 0 }] } }),
       },
     });
+    if (product.featured) revalidatePath("/");
     return NextResponse.json(product, { status: 201 });
   } catch (e: any) {
     if (e?.code === "P2002") {

@@ -22,6 +22,7 @@ export default async function EditProductPage({ params }: { params: { id: string
           status: product.status,
           archiveCode: product.archiveCode,
           imageUrl: product.images[0]?.url ?? null,
+          featured: product.featured,
         }}
       />
       <div className="max-w-2xl pb-24 pt-8 max-[900px]:hidden">

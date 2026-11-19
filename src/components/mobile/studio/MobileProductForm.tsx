@@ -20,6 +20,7 @@ export type ProductFormInitial = {
   status: ArtworkStatus;
   archiveCode: string | null;
   imageUrl: string | null;
+  featured: boolean;
 };
 
 const blurbFor = (c: DbCategory) => ART_GROUPS.find((g) => g.category === fromDbCategory(c))?.blurb ?? "Drawn by hand at Zenom Studio.";
@@ -50,6 +51,7 @@ export function MobileProductForm({
   const [status, setStatus] = useState<ArtworkStatus>(initial?.status ?? "DRAFT");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [imageUrl, setImageUrl] = useState<string | null>(initial?.imageUrl ?? null);
+  const [featured, setFeatured] = useState(initial?.featured ?? false);
   const [uploading, setUploading] = useState(false);
   const [photoErr, setPhotoErr] = useState<string | null>(null);
   const [nameErr, setNameErr] = useState<string | null>(null);
@@ -100,7 +102,7 @@ export function MobileProductForm({
     try {
       let res: Response;
       if (isNew) {
-        const body = { name: title, slug: makeSlug(title), description: desc, category, status, archiveCode: code || undefined, imageUrl: imageUrl || undefined };
+        const body = { name: title, slug: makeSlug(title), description: desc, category, status, featured, archiveCode: code || undefined, imageUrl: imageUrl || undefined };
         res = await json("POST", "/api/products", body);
         // Same title as an existing piece: keep the title, make the page address unique.
         if (res.status === 409) {
@@ -108,7 +110,7 @@ export function MobileProductForm({
           res = await json("POST", "/api/products", { ...body, slug: `${body.slug}-${suffix}` });
         }
       } else {
-        const body: Record<string, unknown> = { name: title, category, status };
+        const body: Record<string, unknown> = { name: title, category, status, featured };
         if (description.trim() !== initial.description.trim()) body.description = desc;
         if (imageUrl && imageUrl !== initial.imageUrl) body.imageUrl = imageUrl;
         res = await json("PATCH", `/api/products/${initial.id}`, body);
@@ -293,8 +295,21 @@ export function MobileProductForm({
               </span>
               <strong style={{ fontSize: 14 }}>from {formatNaira(startingPrice(fromDbCategory(category)))}</strong>
             </div>
-            {/* No "featured" field in the schema yet: shown, but switched off. */}
-            <SwitchRow title="Show on home page" body="Coming soon: adds it to the hero slideshow" checked={false} onChange={() => {}} disabled last />
+            {/* Product.featured: the home page slideshow on phones (DRAFT pieces and pieces without a photo never show). */}
+            <SwitchRow
+              title="Show on home page"
+              body={
+                featured && status === "DRAFT"
+                  ? "Drafts stay hidden. Pick another status to show it."
+                  : featured && !imageUrl
+                    ? "Add a photo so it can show."
+                    : "Adds it to the slideshow at the top of the home page"
+              }
+              checked={featured}
+              onChange={setFeatured}
+              disabled={saving}
+              last
+            />
           </div>
 
           {!isNew && initial.status !== "DRAFT" && (

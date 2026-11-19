@@ -73,6 +73,8 @@ export const productSchema = z.object({
   category: z.enum(["PORTRAIT", "GEOMETRIC", "MINIMALISTIC", "FIGURATIVE"]),
   status: z.enum(["AVAILABLE", "SOLD_OUT", "DRAFT", "COMING_SOON"]),
   archiveCode: z.string().max(50).optional().nullable(),
+  // "Show on home page": the home hero slideshow (mobile) uses featured pieces.
+  featured: z.boolean().optional(),
   // Not a Product column — pulled out separately to create/update the
   // primary ProductImage. See /api/products and /api/products/[id].
   imageUrl: z.string().min(1).max(2000).optional(),
